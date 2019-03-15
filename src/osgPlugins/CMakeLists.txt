@@ -52,6 +52,9 @@ macro(ADD_PLUGIN_DIRECTORY DIRECTORY)
     endif()
 endmacro()
 
+
+ADD_PLUGIN_DIRECTORY(aoa)
+
 ############################################################
 #
 #  NodeKit/Psudo loader plugins
