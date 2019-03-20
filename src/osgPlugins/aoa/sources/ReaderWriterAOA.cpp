@@ -45,7 +45,8 @@
 //#include "post_optimization/markings.h"
 //#include "optimization/preprocessing.h"
 
-//using namespace scg;
+#include "geometry_visitor.h"
+
 
 class ReaderWriterAOA : public osgDB::ReaderWriter
 {
@@ -98,6 +99,20 @@ public:
             return WriteResult(WriteResult::FILE_NOT_HANDLED);
 
         OSG_INFO << "Writing node to AOA file " << file_name << std::endl;
+
+        aoa::geometry_visitor geom_visitor;
+
+        const_cast<osg::Node&>(node).accept(geom_visitor);
+
+        for(auto const& c: geom_visitor.get_chunks())
+        {
+            OSG_INFO << c.name << std::endl;
+        }
+
+        OSG_INFO << "EXTRACTED " << geom_visitor.get_chunks().size() << " CHUNKS" << std::endl;
+        OSG_INFO << "EXTRACTED " << geom_visitor.get_faces().size() << " FACES" << std::endl;
+        OSG_INFO << "EXTRACTED " << geom_visitor.get_verticies().size() << " VIRTICES" << std::endl;
+
 
         //config_t config = make_config(file_name, node, config_path(options));
 
