@@ -46,7 +46,7 @@
 //#include "optimization/preprocessing.h"
 
 #include "geometry_visitor.h"
-
+#include "aurora_aoa_writer.h"
 
 class ReaderWriterAOA : public osgDB::ReaderWriter
 {
@@ -100,7 +100,7 @@ public:
 
         OSG_INFO << "Writing node to AOA file " << file_name << std::endl;
 
-        aoa::geometry_visitor geom_visitor;
+        aurora::geometry_visitor geom_visitor;
 
         const_cast<osg::Node&>(node).accept(geom_visitor);
 
@@ -113,6 +113,8 @@ public:
         OSG_INFO << "EXTRACTED " << geom_visitor.get_faces().size() << " FACES" << std::endl;
         OSG_INFO << "EXTRACTED " << geom_visitor.get_verticies().size() << " VIRTICES" << std::endl;
 
+        aurora::aoa_writer file_writer(fs::path(file_name).replace_extension("aod").string());
+        file_writer.save_data(geom_visitor);
 
         //config_t config = make_config(file_name, node, config_path(options));
 

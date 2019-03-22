@@ -22,9 +22,13 @@ struct is_flat_type
 {
     enum
     {
-        value = (std::is_same_v<std::remove_reference_t<T>, aurora::data_buffer::vao_buffer::format_offset> ||
-                 std::is_same_v<std::remove_reference_t<T>, aurora::data_buffer::vao_buffer::vertex_format::vertex_attribute> ||
-                 std::is_same_v<std::remove_reference_t<T>, aurora::data_buffer::offset_size>
+        value = (std::is_same_v<std::remove_reference_t<T>, aurora::refl::data_buffer::vao_buffer::format_offset> ||
+                 std::is_same_v<std::remove_reference_t<T>, aurora::refl::data_buffer::vao_buffer::vertex_format::vertex_attribute> ||
+                 std::is_same_v<std::remove_reference_t<T>, aurora::refl::data_buffer::offset_size> ||
+                 std::is_same_v<std::remove_reference_t<T>, aurora::refl::node::mesh_t::mesh_face::mesh_face_offset_count_base_mat> ||
+                 std::is_same_v<std::remove_reference_t<T>, aurora::refl::node::mesh_t::mesh_bbox> ||
+                 std::is_same_v<std::remove_reference_t<T>, aurora::refl::node::mesh_t::mesh_bsphere> ||
+                 std::is_same_v<std::remove_reference_t<T>, aurora::refl::node::mesh_t::mesh_vao_ref>
         )
     };
 };
@@ -43,7 +47,7 @@ struct flat_struct_processor
     template<class Type>
     void operator()(Type& value, const char* key, std::enable_if_t<is_leaf_type_v<Type>>* = nullptr)
     {
-        out_ << value << " ";
+        out_ << value << "\t";
     }
 
     string value()
@@ -60,7 +64,10 @@ string serialize_flat(T&& v)
 {
     flat_struct_processor p;
     reflect(p, std::forward<T>(v));
-    return p.value();
+    auto value = p.value();
+    if(!value.empty())
+        value.pop_back(); // remove trailing space
+    return value;
 }
 
 }
@@ -68,8 +75,8 @@ string serialize_flat(T&& v)
 
 struct write_processor
 {
-    write_processor(string const& filename)
-        : out_(filename)
+    write_processor()
+        : out_()
     {}
 
     void operator()(string const& value, const char* key)
@@ -101,7 +108,7 @@ struct write_processor
     }
 
     template<class Type>
-    void operator()(vector<Type> const& value, const char* key, aurora_vector_field_tag const& t = aurora_vector_field_tag())
+    void operator()(vector<Type> const& value, const char* key, refl::aurora_vector_field_tag const& t = refl::aurora_vector_field_tag())
     {
         if(t.size_field)
             this->operator()(value.size(), t.size_field);
@@ -109,6 +116,11 @@ struct write_processor
         {
             this->operator ()(v, key);
         }
+    }
+
+    string result()
+    {
+        return out_.str();
     }
 
 private:
@@ -123,7 +135,7 @@ private:
     }
 
 private:
-    std::ofstream out_;
+    std::ostringstream out_;
     string indent_;
 };
 

@@ -1,7 +1,7 @@
 #include "geometry_visitor.h"
 //#include "utils.h"
 
-namespace aoa
+namespace aurora
 {
 
 geometry_visitor::geometry_visitor()
@@ -55,24 +55,24 @@ chunk_info_opt_material const & geometry_visitor::get_chunk(size_t index) const
     return chunks_[index];
 }
 
-vector<chunk_info_opt_material> const & geometry_visitor::get_chunks()
+vector<chunk_info_opt_material> const & geometry_visitor::get_chunks() const
 {
     return chunks_;
 }
 
-vector<vertex_info> const & geometry_visitor::get_verticies()
+vector<vertex_info> const & geometry_visitor::get_verticies() const
 {
     finalize();
     return verticies_;
 }
 
-vector<face> const & geometry_visitor::get_faces()
+vector<face> const & geometry_visitor::get_faces() const
 {
     finalize();
     return faces_;
 }
 
-void geometry_visitor::finalize()
+void geometry_visitor::finalize() const
 {
     if (!finalized_)
     {

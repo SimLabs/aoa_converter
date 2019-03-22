@@ -8,10 +8,9 @@
 //#include "data.h"
 //#include "material_manager.h"
 
-#include "geom.h"
 #include "vao.h"
 
-namespace aoa
+namespace aurora
 {
 
 struct geometry_visitor : osg::NodeVisitor
@@ -25,12 +24,12 @@ struct geometry_visitor : osg::NodeVisitor
 
     chunk_info_opt_material const &get_chunk(size_t index) const;
 
-    vector<chunk_info_opt_material> const &get_chunks   ();
-    vector<vertex_info>             const &get_verticies();
-    vector<face>                    const &get_faces    ();
+    vector<chunk_info_opt_material> const &get_chunks   () const;
+    vector<vertex_info>             const &get_verticies() const;
+    vector<face>                    const &get_faces    () const;
 
 private:
-    void finalize();
+    void finalize() const;
 
     geom::range_2ui collect_verticies(osg::Geometry const &geometry);
     geom::range_2ui collect_faces    (geom::range_2ui vertex_range, osg::Geometry     const &geometry);
@@ -47,11 +46,11 @@ private:
     vector<face>                    faces_;
     vector<chunk_info_opt_material> chunks_;
 
-    bool finalized_;
+    mutable bool finalized_;
 
     //material_manager_ptr material_manager_;
 };
 
 using geometry_visitor_ptr = shared_ptr<geometry_visitor>;
 
-} // namespace scg
+}

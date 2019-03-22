@@ -2,6 +2,7 @@
 
 #include "common/stl.h"
 #include "common/boost.h"
+#include "boost/filesystem.hpp"
 
 #include "geometry/primitives/point.h"
 #include "geometry/primitives/rectangle.h"
