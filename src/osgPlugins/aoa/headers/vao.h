@@ -5,9 +5,9 @@
 struct vertex_info
 {
     geom::point_3f pos;
-    geom::point_2f uv;
     geom::point_3f norm;
-    geom::point_3f tangent;
+    geom::point_2f uv;
+    //geom::point_3f tangent;
 
     vertex_info() {};
 

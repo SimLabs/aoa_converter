@@ -12,7 +12,7 @@ struct aoa_writer
     static const uint32_t c_GP_HeaderSize = sizeof(c_GP_Version) + sizeof(c_GP_BaseFileMarker) + 4 * sizeof(uint32_t);
 
     aoa_writer(string const& name)
-        : file_(name)
+        : file_(name, std::ios_base::binary | std::ios_base::out)
         , filename_(name)
     {
         unsigned zeros[4] = {};

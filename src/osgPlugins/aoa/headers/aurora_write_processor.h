@@ -24,11 +24,12 @@ struct is_flat_type
     {
         value = (std::is_same_v<std::remove_reference_t<T>, aurora::refl::data_buffer::vao_buffer::format_offset> ||
                  std::is_same_v<std::remove_reference_t<T>, aurora::refl::data_buffer::vao_buffer::vertex_format::vertex_attribute> ||
-                 std::is_same_v<std::remove_reference_t<T>, aurora::refl::data_buffer::offset_size> ||
+                 std::is_same_v<std::remove_reference_t<T>, aurora::refl::offset_size> ||
                  std::is_same_v<std::remove_reference_t<T>, aurora::refl::node::mesh_t::mesh_face::mesh_face_offset_count_base_mat> ||
                  std::is_same_v<std::remove_reference_t<T>, aurora::refl::node::mesh_t::mesh_bbox> ||
                  std::is_same_v<std::remove_reference_t<T>, aurora::refl::node::mesh_t::mesh_bsphere> ||
-                 std::is_same_v<std::remove_reference_t<T>, aurora::refl::node::mesh_t::mesh_vao_ref>
+                 std::is_same_v<std::remove_reference_t<T>, aurora::refl::node::mesh_t::mesh_vao_ref> || 
+                 std::is_same_v<std::remove_reference_t<T>, aurora::refl::quoted_string> 
         )
     };
 };
@@ -48,6 +49,11 @@ struct flat_struct_processor
     void operator()(Type& value, const char* key, std::enable_if_t<is_leaf_type_v<Type>>* = nullptr)
     {
         out_ << value << "\t";
+    }
+
+    void operator()(refl::quoted_string& value, const char* key)
+    {
+        out_ << "\"" << string(value) << "\"" << "\t";
     }
 
     string value()
@@ -79,10 +85,10 @@ struct write_processor
         : out_()
     {}
 
-    void operator()(string const& value, const char* key)
+    void operator()(refl::quoted_string const& value, const char* key)
     {
-        string quote = value.find(' ') != std::string::npos ? "\"" : "";
-        out_ << indent_ << key << " " << quote << value << quote << std::endl;
+        string quote = "\"";
+        out_ << indent_ << key << " " << quote << string(value) << quote << std::endl;
     }
 
     template<class Type>
@@ -116,6 +122,13 @@ struct write_processor
         {
             this->operator ()(v, key);
         }
+    }
+
+    template<class Type>
+    void operator()(optional<Type> const& value, const char* key)
+    {
+        if(value)
+            this->operator ()(*value, key);
     }
 
     string result()

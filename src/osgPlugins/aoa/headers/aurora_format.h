@@ -21,11 +21,14 @@ DECLARE_AURORA_FIELD(VERTEX_FORMAT)
 
 DECLARE_AURORA_FIELD(NODE)
 DECLARE_AURORA_FIELD(NODE_NAME)
+DECLARE_AURORA_FIELD(NODE_SCOPE)
 DECLARE_AURORA_FIELD(NODE_FLAGS)
 DECLARE_AURORA_FIELD(DRAW_ORDER)
 DECLARE_AURORA_FIELD(NODE_CHILDS)
 DECLARE_AURORA_FIELD(NODE_CHILDS_COUNT)
 DECLARE_AURORA_FIELD(NODE_CHILD_NAME)
+DECLARE_AURORA_FIELD(CONTROLLERS)
+DECLARE_AURORA_FIELD(CONTROL_NUMBER)
 
 DECLARE_AURORA_FIELD(MESH)
 DECLARE_AURORA_FIELD(MESH_NUMFACEARRAY)
@@ -35,6 +38,16 @@ DECLARE_AURORA_FIELD(MESH_BBOX)
 DECLARE_AURORA_FIELD(MESH_FACE_ARRAY2)
 DECLARE_AURORA_FIELD(MESH_FACE_OFFSET_COUNT_MTLNAME3)
 
+DECLARE_AURORA_FIELD(MATERIAL)
+DECLARE_AURORA_FIELD(MATERIAL_LIST)
+DECLARE_AURORA_FIELD(MATERIAL_NAME)
+DECLARE_AURORA_FIELD(MATERIAL_LINK)
+
+DECLARE_AURORA_FIELD(LOD_PIXEL)
+DECLARE_AURORA_FIELD(GEOMETRY_BUFFER_STREAM)
+DECLARE_AURORA_FIELD(CONTROL_OBJECT_PARAM_DATA)
+DECLARE_AURORA_FIELD(GEOMETRY_STREAM_NUM_ELEM)
+
 struct aurora_vector_field_tag
 {
     aurora_vector_field_tag(const char* size_field = nullptr)
@@ -42,6 +55,31 @@ struct aurora_vector_field_tag
     {}
 
     const char* size_field;
+};
+
+struct quoted_string
+{
+    string value;
+
+    quoted_string& operator=(string s)
+    {
+        value = s;
+        return *this;
+    }
+
+    operator string& ()
+    {
+        return value;
+    }
+
+    operator string const& () const
+    {
+        return value;
+    }
+
+    REFL_INNER(quoted_string)
+        REFL_ENTRY(value)
+    REFL_END()
 };
 
 namespace vertex_attrs
@@ -84,7 +122,27 @@ ENUM_DECL(vertex_attrs::mode_t)
     ENUM_DECL_ENTRY(ATTR_MODE_PACKED)
 ENUM_DECL_END()
 
+
 }
+
+enum node_scope_t {
+    GLOBAL
+};
+
+ENUM_DECL(node_scope_t)
+    ENUM_DECL_ENTRY(GLOBAL)
+ENUM_DECL_END()
+
+struct offset_size
+{
+    size_t offset;
+    size_t size;
+
+    REFL_INNER(offset_size)
+        REFL_ENTRY(offset)
+        REFL_ENTRY(size)
+    REFL_END()
+};
 
 struct data_buffer
 {
@@ -92,8 +150,8 @@ struct data_buffer
     {
         struct format_offset
         {
-            size_t format;
-            size_t offset;
+            uint32_t format = ~0u;
+            uint32_t offset;
 
             REFL_INNER(format_offset)
                 REFL_ENTRY(format)
@@ -138,18 +196,7 @@ struct data_buffer
         REFL_END()
     };
 
-    struct offset_size
-    {
-        size_t offset;
-        size_t size;
-
-        REFL_INNER(offset_size)
-            REFL_ENTRY(offset)
-            REFL_ENTRY(size)
-        REFL_END()
-    };
-
-    string             data_buffer_file;
+    quoted_string      data_buffer_file;
     offset_size        vertex_file_offset_size;
     offset_size        index_file_offset_size;
     vector<vao_buffer> vaos;
@@ -166,7 +213,7 @@ struct node
 {
     struct node_children
     {
-        vector<string> children;
+        vector<quoted_string> children;
 
         REFL_INNER(node_children)
             REFL_ENTRY_NAMED_WITH_TAG(children, Field__NODE_CHILDS, aurora_vector_field_tag(Field__NODE_CHILDS_COUNT))
@@ -183,8 +230,8 @@ struct node
                 unsigned offset;
                 unsigned count;
                 unsigned base_vertex;
-                string   mat;
-                string   shadow_mat;
+                quoted_string mat;
+                quoted_string shadow_mat;
                 unsigned num_vertices;
 
                 REFL_INNER(mesh_face_offset_count_base_mat)
@@ -249,36 +296,110 @@ struct node
         mesh_bbox    bbox;
 
         REFL_INNER(mesh_t)
-            REFL_ENTRY_NAMED_WITH_TAG(face_array, Field__MESH_FACE_ARRAY2, aurora_vector_field_tag(Field__MESH_NUMFACEARRAY))
-            REFL_ENTRY_NAMED(vao_ref, Field__MESH_VAO_REF)
-            //REFL_ENTRY_NAMED(bsphere, Field__MESH_BSPHERE)
             REFL_ENTRY_NAMED(bbox,    Field__MESH_BBOX)
+            REFL_ENTRY_NAMED(vao_ref, Field__MESH_VAO_REF)
+            REFL_ENTRY_NAMED_WITH_TAG(face_array, Field__MESH_FACE_ARRAY2, aurora_vector_field_tag(Field__MESH_NUMFACEARRAY))
+            //REFL_ENTRY_NAMED(bsphere, Field__MESH_BSPHERE)
         REFL_END()
     };
 
-    string name;
+    struct controllers_t
+    {
+        struct control_object_param_data
+        {
+            struct data_buffer
+            {
+                struct geometry_buffer_stream
+                {
+                    float lod;
+                    offset_size vertex_offset_size;
+                    offset_size index_offset_size;
+
+                    REFL_INNER(geometry_buffer_stream)
+                        REFL_ENTRY_NAMED(lod, Field__LOD_PIXEL)
+                        REFL_ENTRY_NAMED(vertex_offset_size, Field__VERTEX_FILE_OFFSET_SIZE)
+                        REFL_ENTRY_NAMED(index_offset_size,  Field__INDEX_FILE_OFFSET_SIZE)
+                    REFL_END()
+                };
+
+                vector<geometry_buffer_stream> geometry_streams;
+
+                REFL_INNER(data_buffer)
+                    REFL_ENTRY_NAMED_WITH_TAG(geometry_streams, Field__GEOMETRY_BUFFER_STREAM, aurora_vector_field_tag(Field__GEOMETRY_STREAM_NUM_ELEM))
+                REFL_END()
+            };
+        
+            // just wrapper 
+            data_buffer buffer;
+
+            REFL_INNER(control_object_param_data)
+                REFL_ENTRY_NAMED(buffer, Field__DATA_BUFFER)
+            REFL_END()
+        };
+
+        unsigned num_controllers()
+        {
+            return bool(object_param_controller) ? 1 : 0; 
+        }
+
+        optional<control_object_param_data> object_param_controller;
+
+        REFL_INNER(controllers_t)
+            auto size = lobj.num_controllers();
+            proc(size, size, Field__CONTROL_NUMBER);
+            REFL_ENTRY_NAMED(object_param_controller, Field__CONTROL_OBJECT_PARAM_DATA)
+        REFL_END()
+    };
+
+    quoted_string name;
+    node_scope_t  scope = node_scope_t::GLOBAL;
     unsigned flags;
     unsigned draw_order;
     node_children children;
     mesh_t mesh;
+    controllers_t controllers;
 
     REFL_INNER(node)
         REFL_ENTRY_NAMED(name, Field__NODE_NAME)
+        REFL_AS_TYPE_NAMED(scope, string, Field__NODE_SCOPE)
         REFL_ENTRY_NAMED(draw_order, Field__DRAW_ORDER)
         REFL_ENTRY_NAMED(children, Field__NODE_CHILDS)
+        REFL_ENTRY_NAMED(controllers, Field__CONTROLLERS)
         REFL_ENTRY_NAMED(mesh, Field__MESH)
     REFL_END()
 };
 
 
+struct material_list
+{
+    struct material
+    {
+        quoted_string material_name;
+        quoted_string material_link;
+
+        REFL_INNER(material)
+            REFL_ENTRY_NAMED(material_name, Field__MATERIAL_NAME)
+            REFL_ENTRY_NAMED(material_link, Field__MATERIAL_LINK)
+        REFL_END()
+    };
+
+    vector<material> list;
+
+    REFL_INNER(material_list)
+        REFL_ENTRY_NAMED(list, Field__MATERIAL)
+    REFL_END()
+};
+
 struct aurora_format
 {
     data_buffer buffer_data;
     vector<node> nodes;
+    material_list materials;
 
     REFL_INNER(aurora_format)
-        REFL_ENTRY_NAMED(buffer_data, Field__DATA_BUFFER);
-        REFL_ENTRY_NAMED(nodes, Field__NODE);
+        REFL_ENTRY_NAMED(materials, Field__MATERIAL_LIST)
+        REFL_ENTRY_NAMED(buffer_data, Field__DATA_BUFFER)
+        REFL_ENTRY_NAMED(nodes, Field__NODE)
     REFL_END()
 };
 

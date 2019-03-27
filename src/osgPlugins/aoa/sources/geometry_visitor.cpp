@@ -128,7 +128,7 @@ geom::range_2ui geometry_visitor::collect_faces(geom::range_2ui vertex_range, os
         return faces_range;
 
     unsigned elements_count = primitive_set.getNumIndices();
-    Assert(elements_count % 3 == 0);
+    Assert(dynamic_cast<const osg::DrawArrays*>(&primitive_set));
 
     for (unsigned i = 0; i < elements_count; i += 3)
     {

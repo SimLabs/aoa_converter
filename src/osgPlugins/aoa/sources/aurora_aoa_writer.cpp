@@ -7,12 +7,14 @@ namespace aurora
 {
 
 using vertex_attribute = refl::data_buffer::vao_buffer::vertex_format::vertex_attribute;
+using geometry_buffer_stream = refl::node::controllers_t::control_object_param_data::data_buffer::geometry_buffer_stream;
 using aurora::refl::vertex_attrs::type_t;
 using aurora::refl::vertex_attrs::mode_t;
 
 
 void aoa_writer::save_data(geometry_visitor const& v)
 {
+    refl::aurora_format aoa_descr;
 
     auto const& vertices = v.get_verticies();
     auto const& faces = v.get_faces();
@@ -22,16 +24,23 @@ void aoa_writer::save_data(geometry_visitor const& v)
     unsigned index_buffer_size = faces.size() * sizeof(std::remove_reference_t<decltype(faces)>::value_type);
     unsigned vertex_buffer_size = vertices.size() * sizeof(std::remove_reference_t<decltype(vertices)>::value_type);
 
+    auto index_offset = [](unsigned len){ return len * sizeof(std::remove_reference_t<decltype(faces)>::value_type); };
+    auto vertex_offset = [](unsigned len) { return len * sizeof(std::remove_reference_t<decltype(vertices)>::value_type); };
+
+    // stub for materials
+
+    aoa_descr.materials.list.push_back({"test_mtl", "__DEAFG"});
+
     // create buffer file description
 
     refl::data_buffer buffer_descr;
-    buffer_descr.data_buffer_file = filename_;
+    buffer_descr.data_buffer_file = fs::path(filename_).filename().string();
 
     buffer_descr.index_file_offset_size = { c_GP_HeaderSize, index_buffer_size };
     buffer_descr.vertex_file_offset_size = { c_GP_HeaderSize + index_buffer_size, vertex_buffer_size };
 
     refl::data_buffer::vao_buffer vao_descr;
-    vao_descr.vertex_format_offset = { uint16_t(~0u), 0 /*faces.size() * sizeof(decltype(faces)::element_type) */ };
+    vao_descr.vertex_format_offset.offset = index_buffer_size;
     vao_descr.format.attributes.push_back(vertex_attribute
     {   /*.id      = */ 0, 
         /*.size    = */ 3, 
@@ -63,6 +72,7 @@ void aoa_writer::save_data(geometry_visitor const& v)
     auto const& chunks = v.get_chunks();
     vector<refl::node> all_nodes;
 
+
     for(auto const& chunk: chunks)
     {
         refl::node node_descr;
@@ -71,11 +81,26 @@ void aoa_writer::save_data(geometry_visitor const& v)
         node_descr.draw_order = 0;
 
         refl::node::mesh_t::mesh_face mesh_geom;
+        refl::node::controllers_t::control_object_param_data control_object_params;
+        refl::node::controllers_t::control_object_param_data::data_buffer geometry_streams;
+
+        geometry_buffer_stream geom_stream;
+        geom_stream.index_offset_size.offset = index_offset(chunk.faces_range.lo());
+        geom_stream.index_offset_size.size = index_offset(chunk.faces_range.hi() - chunk.faces_range.lo());
+        geom_stream.vertex_offset_size.offset = vertex_offset(chunk.vertex_range.lo());
+        geom_stream.vertex_offset_size.size = vertex_offset(chunk.vertex_range.hi() - chunk.vertex_range.lo());
+        geom_stream.lod = 250.;
+        geometry_streams.geometry_streams.push_back(geom_stream);
+
+        control_object_params.buffer = geometry_streams;
+
+        node_descr.controllers.object_param_controller = control_object_params;
+
         mesh_geom.params.id = 0;
-        mesh_geom.params.offset = chunk.faces_range.lo();
+        mesh_geom.params.offset = index_offset(chunk.faces_range.lo());
         mesh_geom.params.count = chunk.faces_range.hi() - chunk.faces_range.lo();
-        mesh_geom.params.base_vertex = chunk.vertex_range.lo();
-        mesh_geom.params.mat = "__DEAFG";
+        mesh_geom.params.base_vertex = 0;
+        mesh_geom.params.mat = "test_mtl";
         mesh_geom.params.shadow_mat = "Shadow_Common";
         mesh_geom.params.num_vertices = chunk.vertex_range.hi() - chunk.vertex_range.lo();
 
@@ -93,7 +118,6 @@ void aoa_writer::save_data(geometry_visitor const& v)
 
     
     write_processor proc;
-    refl::aurora_format aoa_descr;
 
     aoa_descr.buffer_data = buffer_descr;
     aoa_descr.nodes = all_nodes;
@@ -105,8 +129,8 @@ void aoa_writer::save_data(geometry_visitor const& v)
 
     // write data
 
-    write(vertices.data(), vertex_buffer_size);
     write(faces.data(), index_buffer_size);
+    write(vertices.data(), vertex_buffer_size);
 
     // write sizes of section to the header
 
