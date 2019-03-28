@@ -12,6 +12,40 @@ using aurora::refl::vertex_attrs::type_t;
 using aurora::refl::vertex_attrs::mode_t;
 
 
+auto index_offset = [](unsigned len) { return len * sizeof(face); };
+auto vertex_offset = [](unsigned len) { return len * sizeof(vertex_info); };
+
+refl::node create_root_node(geometry_visitor const& v)
+{
+    refl::node root_node;
+
+    root_node.name = "Old House";
+    root_node.draw_order = 0;
+    root_node.controllers.treat_children = "";
+    root_node.scope = "GLOBAL";
+
+    refl::node::controllers_t::control_object_param_data control_object_params;
+    auto&  geometry_streams = control_object_params.buffer;
+
+    for(auto const& chunk : v.get_chunks())
+    {
+        root_node.children.children.push_back(chunk.name);
+
+        geometry_buffer_stream geom_stream;
+        geom_stream.index_offset_size.offset = index_offset(chunk.faces_range.lo());
+        geom_stream.index_offset_size.size = index_offset(chunk.faces_range.hi() - chunk.faces_range.lo());
+        geom_stream.vertex_offset_size.offset = vertex_offset(chunk.vertex_range.lo());
+        geom_stream.vertex_offset_size.size = vertex_offset(chunk.vertex_range.hi() - chunk.vertex_range.lo());
+        geom_stream.lod = 250.;
+
+        geometry_streams.geometry_streams.push_back(geom_stream);
+    }
+
+    root_node.controllers.object_param_controller = control_object_params;
+
+    return root_node;
+}
+
 void aoa_writer::save_data(geometry_visitor const& v)
 {
     refl::aurora_format aoa_descr;
@@ -23,9 +57,6 @@ void aoa_writer::save_data(geometry_visitor const& v)
     unsigned light_buffer_size = 0;
     unsigned index_buffer_size = faces.size() * sizeof(std::remove_reference_t<decltype(faces)>::value_type);
     unsigned vertex_buffer_size = vertices.size() * sizeof(std::remove_reference_t<decltype(vertices)>::value_type);
-
-    auto index_offset = [](unsigned len){ return len * sizeof(std::remove_reference_t<decltype(faces)>::value_type); };
-    auto vertex_offset = [](unsigned len) { return len * sizeof(std::remove_reference_t<decltype(vertices)>::value_type); };
 
     // stub for materials
 
@@ -72,10 +103,14 @@ void aoa_writer::save_data(geometry_visitor const& v)
     auto const& chunks = v.get_chunks();
     vector<refl::node> all_nodes;
 
+    all_nodes.push_back(create_root_node(v));
 
+    unsigned count = 0;
     for(auto const& chunk: chunks)
     {
         refl::node node_descr;
+        node_descr.mesh = refl::node::mesh_t{};
+        auto& mesh = node_descr.mesh.value();
 
         node_descr.name = chunk.name;
         node_descr.draw_order = 0;
@@ -84,17 +119,18 @@ void aoa_writer::save_data(geometry_visitor const& v)
         refl::node::controllers_t::control_object_param_data control_object_params;
         refl::node::controllers_t::control_object_param_data::data_buffer geometry_streams;
 
-        geometry_buffer_stream geom_stream;
-        geom_stream.index_offset_size.offset = index_offset(chunk.faces_range.lo());
-        geom_stream.index_offset_size.size = index_offset(chunk.faces_range.hi() - chunk.faces_range.lo());
-        geom_stream.vertex_offset_size.offset = vertex_offset(chunk.vertex_range.lo());
-        geom_stream.vertex_offset_size.size = vertex_offset(chunk.vertex_range.hi() - chunk.vertex_range.lo());
-        geom_stream.lod = 250.;
-        geometry_streams.geometry_streams.push_back(geom_stream);
+        //geometry_buffer_stream geom_stream;
+        //geom_stream.index_offset_size.offset = index_offset(chunk.faces_range.lo());
+        //geom_stream.index_offset_size.size = index_offset(chunk.faces_range.hi() - chunk.faces_range.lo());
+        //geom_stream.vertex_offset_size.offset = vertex_offset(chunk.vertex_range.lo());
+        //geom_stream.vertex_offset_size.size = vertex_offset(chunk.vertex_range.hi() - chunk.vertex_range.lo());
+        //geom_stream.lod = 250.;
+        //geometry_streams.geometry_streams.push_back(geom_stream);
 
-        control_object_params.buffer = geometry_streams;
+        //control_object_params.buffer = geometry_streams;
 
-        node_descr.controllers.object_param_controller = control_object_params;
+        //node_descr.controllers.object_param_controller = control_object_params;
+        node_descr.controllers.draw_mesh = "";
 
         mesh_geom.params.id = 0;
         mesh_geom.params.offset = index_offset(chunk.faces_range.lo());
@@ -104,12 +140,12 @@ void aoa_writer::save_data(geometry_visitor const& v)
         mesh_geom.params.shadow_mat = "Shadow_Common";
         mesh_geom.params.num_vertices = chunk.vertex_range.hi() - chunk.vertex_range.lo();
 
-        node_descr.mesh.vao_ref.vao_id = 0;
-        node_descr.mesh.vao_ref.geom_stream_id = 0;
+        mesh.vao_ref.vao_id = 0;
+        mesh.vao_ref.geom_stream_id = count++;
 
-        node_descr.mesh.bbox.rect = chunk.aabb;
+        mesh.bbox.rect = chunk.aabb;
 
-        node_descr.mesh.face_array.push_back(mesh_geom);
+        mesh.face_array.push_back(mesh_geom);
 
         all_nodes.push_back(node_descr);
     }

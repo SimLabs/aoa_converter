@@ -20,15 +20,13 @@ DECLARE_AURORA_FIELD(VERTEX_ATTRIBUTE)
 DECLARE_AURORA_FIELD(VERTEX_FORMAT)
 
 DECLARE_AURORA_FIELD(NODE)
+DECLARE_AURORA_FIELD(DRAW_ORDER)
 DECLARE_AURORA_FIELD(NODE_NAME)
 DECLARE_AURORA_FIELD(NODE_SCOPE)
 DECLARE_AURORA_FIELD(NODE_FLAGS)
-DECLARE_AURORA_FIELD(DRAW_ORDER)
 DECLARE_AURORA_FIELD(NODE_CHILDS)
 DECLARE_AURORA_FIELD(NODE_CHILDS_COUNT)
 DECLARE_AURORA_FIELD(NODE_CHILD_NAME)
-DECLARE_AURORA_FIELD(CONTROLLERS)
-DECLARE_AURORA_FIELD(CONTROL_NUMBER)
 
 DECLARE_AURORA_FIELD(MESH)
 DECLARE_AURORA_FIELD(MESH_NUMFACEARRAY)
@@ -44,9 +42,14 @@ DECLARE_AURORA_FIELD(MATERIAL_NAME)
 DECLARE_AURORA_FIELD(MATERIAL_LINK)
 
 DECLARE_AURORA_FIELD(LOD_PIXEL)
-DECLARE_AURORA_FIELD(GEOMETRY_BUFFER_STREAM)
-DECLARE_AURORA_FIELD(CONTROL_OBJECT_PARAM_DATA)
 DECLARE_AURORA_FIELD(GEOMETRY_STREAM_NUM_ELEM)
+DECLARE_AURORA_FIELD(GEOMETRY_BUFFER_STREAM)
+
+DECLARE_AURORA_FIELD(CONTROLLERS)
+DECLARE_AURORA_FIELD(CONTROL_NUMBER)
+DECLARE_AURORA_FIELD(CONTROL_OBJECT_PARAM_DATA)
+DECLARE_AURORA_FIELD(CONTROL_TREAT_CHILDS)
+DECLARE_AURORA_FIELD(CONTROL_DRAW_MESH)
 
 struct aurora_vector_field_tag
 {
@@ -60,6 +63,11 @@ struct aurora_vector_field_tag
 struct quoted_string
 {
     string value;
+
+    quoted_string(string s = "")
+        : value(s)
+    {
+    }
 
     quoted_string& operator=(string s)
     {
@@ -216,7 +224,7 @@ struct node
         vector<quoted_string> children;
 
         REFL_INNER(node_children)
-            REFL_ENTRY_NAMED_WITH_TAG(children, Field__NODE_CHILDS, aurora_vector_field_tag(Field__NODE_CHILDS_COUNT))
+            REFL_ENTRY_NAMED_WITH_TAG(children, Field__NODE_CHILD_NAME, aurora_vector_field_tag(Field__NODE_CHILDS_COUNT))
         REFL_END()
     };
 
@@ -337,31 +345,43 @@ struct node
             REFL_END()
         };
 
-        unsigned num_controllers()
+        template<class T>
+        unsigned count_field(optional<T> const& f) const
         {
-            return bool(object_param_controller) ? 1 : 0; 
+            return bool(f) ? 1 : 0;
+        }
+
+        unsigned num_controllers() const
+        {
+            return count_field(object_param_controller) +
+                   count_field(treat_children) +
+                   count_field(draw_mesh);
         }
 
         optional<control_object_param_data> object_param_controller;
+        optional<string>                    treat_children;
+        optional<string>                    draw_mesh;
 
         REFL_INNER(controllers_t)
             auto size = lobj.num_controllers();
             proc(size, size, Field__CONTROL_NUMBER);
             REFL_ENTRY_NAMED(object_param_controller, Field__CONTROL_OBJECT_PARAM_DATA)
+            REFL_ENTRY_NAMED(treat_children, Field__CONTROL_TREAT_CHILDS)
+            REFL_ENTRY_NAMED(draw_mesh, Field__CONTROL_DRAW_MESH)
         REFL_END()
     };
 
     quoted_string name;
-    node_scope_t  scope = node_scope_t::GLOBAL;
+    optional<string> scope;
     unsigned flags;
     unsigned draw_order;
     node_children children;
-    mesh_t mesh;
+    optional<mesh_t> mesh;
     controllers_t controllers;
 
     REFL_INNER(node)
         REFL_ENTRY_NAMED(name, Field__NODE_NAME)
-        REFL_AS_TYPE_NAMED(scope, string, Field__NODE_SCOPE)
+        REFL_ENTRY_NAMED(scope,  Field__NODE_SCOPE)
         REFL_ENTRY_NAMED(draw_order, Field__DRAW_ORDER)
         REFL_ENTRY_NAMED(children, Field__NODE_CHILDS)
         REFL_ENTRY_NAMED(controllers, Field__CONTROLLERS)
