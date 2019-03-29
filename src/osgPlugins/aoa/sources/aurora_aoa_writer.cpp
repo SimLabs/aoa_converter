@@ -14,6 +14,12 @@ using aurora::refl::vertex_attrs::mode_t;
 
 auto index_offset = [](unsigned len) { return len * sizeof(face); };
 auto vertex_offset = [](unsigned len) { return len * sizeof(vertex_info); };
+void write_material(chunk_info_opt_material const& info, refl::material_list& mats);
+
+string material_name_for_node(string node_name)
+{
+    return node_name + "_mtl";
+}
 
 refl::node create_root_node(geometry_visitor const& v)
 {
@@ -58,9 +64,12 @@ void aoa_writer::save_data(geometry_visitor const& v)
     unsigned index_buffer_size = faces.size() * sizeof(std::remove_reference_t<decltype(faces)>::value_type);
     unsigned vertex_buffer_size = vertices.size() * sizeof(std::remove_reference_t<decltype(vertices)>::value_type);
 
-    // stub for materials
+    // write materials
 
-    aoa_descr.materials.list.push_back({"test_mtl", "__DEAFG"});
+    for(auto const& chunk : v.get_chunks())
+    {
+        write_material(chunk, aoa_descr.materials);
+    }
 
     // create buffer file description
 
@@ -136,7 +145,7 @@ void aoa_writer::save_data(geometry_visitor const& v)
         mesh_geom.params.offset = index_offset(chunk.faces_range.lo());
         mesh_geom.params.count = chunk.faces_range.hi() - chunk.faces_range.lo();
         mesh_geom.params.base_vertex = 0;
-        mesh_geom.params.mat = "test_mtl";
+        mesh_geom.params.mat = material_name_for_node(node_descr.name);
         mesh_geom.params.shadow_mat = "Shadow_Common";
         mesh_geom.params.num_vertices = chunk.vertex_range.hi() - chunk.vertex_range.lo();
 
@@ -177,5 +186,26 @@ void aoa_writer::save_data(geometry_visitor const& v)
     write(&index_buffer_size, sizeof(unsigned));
     write(&vertex_buffer_size, sizeof(unsigned));
 }
+
+
+
+void write_material(chunk_info_opt_material const & info, refl::material_list& mats)
+{
+    refl::material_list::material mat;
+    mat.name = material_name_for_node(info.name);
+    mat.link = "__D";
+
+    for(unsigned i = 0; i < info.material.textures.size(); i++)
+    {
+        mat.textures.push_back(refl::material_list::material::material_group{i, info.material.textures[i]});
+
+        // TODO only diffuse for now
+        break;
+    }
+
+    mats.list.push_back(mat);
+}
+
+
 
 }

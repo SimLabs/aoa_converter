@@ -47,6 +47,7 @@
 
 #include "geometry_visitor.h"
 #include "aurora_aoa_writer.h"
+#include "convert_textures_visitor.h"
 
 class ReaderWriterAOA : public osgDB::ReaderWriter
 {
@@ -97,6 +98,10 @@ public:
 //        DebugBreak();
         if (!acceptsExtension(osgDB::getFileExtension(file_name)))
             return WriteResult(WriteResult::FILE_NOT_HANDLED);
+
+        aurora::convert_textures_visitor texture_visitor;
+        const_cast<osg::Node&>(node).accept(texture_visitor);
+        texture_visitor.write(osgDB::getFilePath(file_name));
 
         OSG_INFO << "Writing node to AOA file " << file_name << std::endl;
 

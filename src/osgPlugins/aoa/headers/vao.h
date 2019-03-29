@@ -54,20 +54,18 @@ inline bool operator==(material_modifier const &lhs, material_modifier const &rh
         && lhs.textures == rhs.textures;
 }
 
-struct raw_chunk_material
+struct material_info
 {
-    optional<string> material;
-    image_ref_cptr   texture;
-    optional<size_t> texture_index;
+    // ordered list of texture unit (index in vector) -> filename
+    vector<string> textures;
 
-    raw_chunk_material()
-        : texture_index(0)
+    material_info()
     {}
 };
 
 struct chunk_info_opt_material
 {
-    raw_chunk_material material;
+    material_info      material;
 
     string             name;
     geom::range_2ui    vertex_range;

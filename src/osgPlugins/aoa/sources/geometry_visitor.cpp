@@ -1,5 +1,7 @@
 #include "geometry_visitor.h"
 //#include "utils.h"
+#include <osg/Texture2D>
+#include <osg/StateSet>
 
 namespace aurora
 {
@@ -24,6 +26,8 @@ void geometry_visitor::apply(osg::Geometry &geometry)
 {
     chunk_info_opt_material chunk;
     
+    extract_texture_info(geometry, chunk);
+
     chunk.name = geometry.getName();
     chunk.vertex_range = collect_verticies(geometry);
     if (chunk.vertex_range.hi() == chunk.vertex_range.lo())
@@ -142,6 +146,25 @@ geom::range_2ui geometry_visitor::collect_faces(geom::range_2ui vertex_range, os
 
     faces_range.hi_ += elements_count / 3;
     return faces_range;
+}
+
+void geometry_visitor::extract_texture_info(osg::Drawable& node, chunk_info_opt_material& chunk)
+{
+    osg::Drawable* drawable = &node;
+    if(drawable && drawable->getStateSet())
+    {
+        osg::StateSet* stateset = drawable->getStateSet();
+        for(unsigned int i = 0; i < stateset->getTextureAttributeList().size(); ++i)
+        {
+            osg::Texture2D* texture = dynamic_cast<osg::Texture2D*>(stateset->getTextureAttribute(i, osg::StateAttribute::TEXTURE));
+            if(texture)
+            {
+                chunk.material.textures.push_back(texture->getImage()->getFileName());
+            }
+        }
+    }
+
+    //traverse(node);
 }
 
 void geometry_visitor::fill_aabb(chunk_info_opt_material &chunk) const

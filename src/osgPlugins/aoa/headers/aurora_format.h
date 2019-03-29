@@ -40,6 +40,9 @@ DECLARE_AURORA_FIELD(MATERIAL)
 DECLARE_AURORA_FIELD(MATERIAL_LIST)
 DECLARE_AURORA_FIELD(MATERIAL_NAME)
 DECLARE_AURORA_FIELD(MATERIAL_LINK)
+DECLARE_AURORA_FIELD(MATERIAL_GROUP)
+DECLARE_AURORA_FIELD(TEXTURE)
+DECLARE_AURORA_FIELD(TEXTURE_LINK)
 
 DECLARE_AURORA_FIELD(LOD_PIXEL)
 DECLARE_AURORA_FIELD(GEOMETRY_STREAM_NUM_ELEM)
@@ -389,17 +392,47 @@ struct node
     REFL_END()
 };
 
+enum texture_link {
+    __part0,
+    __part1,
+    __part2
+};
+
+ENUM_DECL(texture_link)
+    ENUM_DECL_ENTRY(__part0)
+    ENUM_DECL_ENTRY(__part1)
+    ENUM_DECL_ENTRY(__part2)
+ENUM_DECL_END()
 
 struct material_list
 {
     struct material
     {
-        quoted_string material_name;
-        quoted_string material_link;
+        struct material_group
+        {
+            material_group(unsigned texture_unit, string texture_file)
+                : link(texture_link(texture_unit))
+                , texture(texture_file)
+            {
+            }
+
+            texture_link  link;
+            quoted_string texture;
+
+            REFL_INNER(material_group)
+                REFL_AS_TYPE_NAMED(link, quoted_string, Field__TEXTURE_LINK)
+                REFL_ENTRY_NAMED(texture, Field__TEXTURE)
+            REFL_END()
+        };
+
+        quoted_string          name;
+        quoted_string          link;
+        vector<material_group> textures;
 
         REFL_INNER(material)
-            REFL_ENTRY_NAMED(material_name, Field__MATERIAL_NAME)
-            REFL_ENTRY_NAMED(material_link, Field__MATERIAL_LINK)
+            REFL_ENTRY_NAMED(name, Field__MATERIAL_NAME)
+            REFL_ENTRY_NAMED(link, Field__MATERIAL_LINK)
+            REFL_ENTRY_NAMED(textures, Field__MATERIAL_GROUP)
         REFL_END()
     };
 

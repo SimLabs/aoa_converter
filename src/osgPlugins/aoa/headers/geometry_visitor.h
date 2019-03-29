@@ -34,6 +34,7 @@ private:
     geom::range_2ui collect_verticies(osg::Geometry const &geometry);
     geom::range_2ui collect_faces    (geom::range_2ui vertex_range, osg::Geometry     const &geometry);
     geom::range_2ui collect_faces    (geom::range_2ui vertex_range, osg::PrimitiveSet const &primitive_set);
+    void extract_texture_info(osg::Drawable & node, chunk_info_opt_material & chunk);
 
     void fill_aabb(chunk_info_opt_material &chunk) const;
 
