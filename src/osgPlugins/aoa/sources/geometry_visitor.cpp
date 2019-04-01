@@ -1,4 +1,5 @@
 #include "geometry_visitor.h"
+#include "geometry_visitor.h"
 //#include "utils.h"
 #include <osg/Texture2D>
 #include <osg/StateSet>
@@ -24,11 +25,12 @@ void geometry_visitor::apply(osg::Geode &geode)
 
 void geometry_visitor::apply(osg::Geometry &geometry)
 {
+    static unsigned count = 0;
     chunk_info_opt_material chunk;
     
     extract_texture_info(geometry, chunk);
 
-    chunk.name = geometry.getName();
+    chunk.name = geometry.getName().empty() ? "object_" + std::to_string(++count) : geometry.getName();
     chunk.vertex_range = collect_verticies(geometry);
     if (chunk.vertex_range.hi() == chunk.vertex_range.lo())
     {
@@ -132,7 +134,7 @@ geom::range_2ui geometry_visitor::collect_faces(geom::range_2ui vertex_range, os
         return faces_range;
 
     unsigned elements_count = primitive_set.getNumIndices();
-    Assert(dynamic_cast<const osg::DrawArrays*>(&primitive_set));
+    Assert(elements_count % 3 == 0);
 
     for (unsigned i = 0; i < elements_count; i += 3)
     {
