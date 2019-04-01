@@ -49,6 +49,17 @@
 #include "aurora_aoa_writer.h"
 #include "convert_textures_visitor.h"
 
+
+class MakeTransformsStaticVisitor: public osg::NodeVisitor
+{
+    using osg::NodeVisitor::NodeVisitor;
+
+    void apply(osg::Transform& t) override
+    {
+        t.setDataVariance(osg::Object::DataVariance::STATIC);
+    }
+};
+
 class ReaderWriterAOA : public osgDB::ReaderWriter
 {
 public:
@@ -69,6 +80,35 @@ public:
         //supportsOption("BUMP=<unit>", "Set texture unit for bumpmap texture");
         //supportsOption("DISPLACEMENT=<unit>", "Set texture unit for displacement texture");
         //supportsOption("REFLECTION=<unit>", "Set texture unit for reflection texture");
+    }
+
+    void write_debug_obj_file(aurora::geometry_visitor& geom_visitor, string file_name) const
+    {
+        std::ofstream obj_file(fs::path(file_name).replace_extension("obj").string());
+
+        for(auto const& v : geom_visitor.get_verticies())
+        {
+            obj_file << "v " << v.pos.x << " " << v.pos.y << " " << v.pos.z << std::endl;
+        }
+
+        for(auto const& v : geom_visitor.get_verticies())
+        {
+            obj_file << "vn " << v.norm.x << " " << v.norm.y << " " << v.norm.z << std::endl;
+        }
+
+
+        for(auto const& face : geom_visitor.get_faces())
+        {
+            unsigned v[3] = { face.v[0] + 1, face.v[1] + 1, face.v[2] + 1 };
+            obj_file << "f ";
+            for(unsigned i = 0; i < 3; ++i)
+            {
+                string foo = std::to_string(v[i]);
+                foo = foo + "//" + foo + " ";
+                obj_file << foo;
+            }
+            obj_file << std::endl;
+        }
     }
 
     const char* className() const override { return "Aurora engine AOA Writer"; }
@@ -99,6 +139,14 @@ public:
         if (!acceptsExtension(osgDB::getFileExtension(file_name)))
             return WriteResult(WriteResult::FILE_NOT_HANDLED);
 
+        // apply transforms from ancestor nodes to geometry
+        // optimizer will only do this for transform nodes whose data variance is STATIC so we set it here 
+        MakeTransformsStaticVisitor make_tranforms_static(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN);
+        const_cast<osg::Node&>(node).accept(make_tranforms_static);
+        // run the optimizer
+        osgUtil::Optimizer optimizer;
+        optimizer.optimize(&const_cast<osg::Node&>(node), osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS);
+
         aurora::convert_textures_visitor texture_visitor;
         const_cast<osg::Node&>(node).accept(texture_visitor);
         texture_visitor.write(osgDB::getFilePath(file_name));
@@ -120,6 +168,11 @@ public:
 
         aurora::aoa_writer file_writer(fs::path(file_name).replace_extension("aod").string());
         file_writer.save_data(geom_visitor);
+
+
+        // ======================= DEBUG PRINT OBJ ==========================
+        write_debug_obj_file(geom_visitor, file_name);
+
 
         //config_t config = make_config(file_name, node, config_path(options));
 
