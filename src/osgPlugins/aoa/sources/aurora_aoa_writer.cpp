@@ -21,11 +21,11 @@ string material_name_for_node(string node_name)
     return node_name + "_mtl";
 }
 
-refl::node create_root_node(geometry_visitor const& v)
+refl::node create_root_node(geometry_visitor const& v, string root_name)
 {
     refl::node root_node;
 
-    root_node.name = "Old House";
+    root_node.name = root_name;
     root_node.draw_order = 0;
     root_node.controllers.treat_children = "";
     root_node.scope = "GLOBAL";
@@ -112,7 +112,7 @@ void aoa_writer::save_data(geometry_visitor const& v)
     auto const& chunks = v.get_chunks();
     vector<refl::node> all_nodes;
 
-    all_nodes.push_back(create_root_node(v));
+    all_nodes.push_back(create_root_node(v, fs::path(filename_).stem().string()));
 
     unsigned count = 0;
     for(auto const& chunk: chunks)
