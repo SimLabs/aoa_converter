@@ -307,10 +307,10 @@ struct node
         mesh_bbox    bbox;
 
         REFL_INNER(mesh_t)
-            REFL_ENTRY_NAMED(bbox,    Field__MESH_BBOX)
             REFL_ENTRY_NAMED(vao_ref, Field__MESH_VAO_REF)
-            REFL_ENTRY_NAMED_WITH_TAG(face_array, Field__MESH_FACE_ARRAY2, aurora_vector_field_tag(Field__MESH_NUMFACEARRAY))
             //REFL_ENTRY_NAMED(bsphere, Field__MESH_BSPHERE)
+            REFL_ENTRY_NAMED(bbox,    Field__MESH_BBOX)
+            REFL_ENTRY_NAMED_WITH_TAG(face_array, Field__MESH_FACE_ARRAY2, aurora_vector_field_tag(Field__MESH_NUMFACEARRAY))
         REFL_END()
     };
 

@@ -36,16 +36,16 @@ refl::node create_root_node(geometry_visitor const& v, string root_name)
     for(auto const& chunk : v.get_chunks())
     {
         root_node.children.children.push_back(chunk.name);
-
-        geometry_buffer_stream geom_stream;
-        geom_stream.index_offset_size.offset = index_offset(chunk.faces_range.lo());
-        geom_stream.index_offset_size.size = index_offset(chunk.faces_range.hi() - chunk.faces_range.lo());
-        geom_stream.vertex_offset_size.offset = vertex_offset(chunk.vertex_range.lo());
-        geom_stream.vertex_offset_size.size = vertex_offset(chunk.vertex_range.hi() - chunk.vertex_range.lo());
-        geom_stream.lod = 250.;
-
-        geometry_streams.geometry_streams.push_back(geom_stream);
     }
+
+    geometry_buffer_stream geom_stream;
+    geom_stream.index_offset_size.offset = 0;
+    geom_stream.index_offset_size.size = index_offset(v.get_faces().size());
+    geom_stream.vertex_offset_size.offset = 0;
+    geom_stream.vertex_offset_size.size = vertex_offset(v.get_verticies().size());
+    geom_stream.lod = 250.;
+
+    geometry_streams.geometry_streams.push_back(geom_stream);
 
     root_node.controllers.object_param_controller = control_object_params;
 
@@ -114,7 +114,6 @@ void aoa_writer::save_data(geometry_visitor const& v)
 
     all_nodes.push_back(create_root_node(v, fs::path(filename_).stem().string()));
 
-    unsigned count = 0;
     for(auto const& chunk: chunks)
     {
         refl::node node_descr;
@@ -142,7 +141,7 @@ void aoa_writer::save_data(geometry_visitor const& v)
         node_descr.controllers.draw_mesh = "";
 
         mesh_geom.params.id = 0;
-        mesh_geom.params.offset = index_offset(chunk.faces_range.lo());
+        mesh_geom.params.offset = chunk.faces_range.lo() * 3;
         mesh_geom.params.count = chunk.faces_range.hi() - chunk.faces_range.lo();
         mesh_geom.params.base_vertex = 0;
         mesh_geom.params.mat = material_name_for_node(node_descr.name);
@@ -150,7 +149,7 @@ void aoa_writer::save_data(geometry_visitor const& v)
         mesh_geom.params.num_vertices = chunk.vertex_range.hi() - chunk.vertex_range.lo();
 
         mesh.vao_ref.vao_id = 0;
-        mesh.vao_ref.geom_stream_id = count++;
+        mesh.vao_ref.geom_stream_id = 0;
 
         mesh.bbox.rect = chunk.aabb;
 
