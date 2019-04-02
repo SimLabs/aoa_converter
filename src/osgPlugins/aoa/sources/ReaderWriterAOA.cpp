@@ -57,6 +57,7 @@ class MakeTransformsStaticVisitor: public osg::NodeVisitor
     void apply(osg::Transform& t) override
     {
         t.setDataVariance(osg::Object::DataVariance::STATIC);
+        traverse(t);
     }
 };
 
@@ -139,58 +140,56 @@ public:
         if (!acceptsExtension(osgDB::getFileExtension(file_name)))
             return WriteResult(WriteResult::FILE_NOT_HANDLED);
 
-        // apply transforms from ancestor nodes to geometry
-        // optimizer will only do this for transform nodes whose data variance is STATIC so we set it here 
-        MakeTransformsStaticVisitor make_tranforms_static(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN);
-        const_cast<osg::Node&>(node).accept(make_tranforms_static);
-        // run the optimizer
-        osgUtil::Optimizer optimizer;
-        optimizer.optimize(&const_cast<osg::Node&>(node), osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS);
-
-        aurora::convert_textures_visitor texture_visitor;
-        const_cast<osg::Node&>(node).accept(texture_visitor);
-        texture_visitor.write(osgDB::getFilePath(file_name));
-
-        OSG_INFO << "Writing node to AOA file " << file_name << std::endl;
-
-        aurora::geometry_visitor geom_visitor;
-
-        const_cast<osg::Node&>(node).accept(geom_visitor);
-
-        for(auto const& c: geom_visitor.get_chunks())
+        try 
         {
-            OSG_INFO << c.name << std::endl;
+            // convert all textures to bmp
+            aurora::convert_textures_visitor texture_visitor;
+            const_cast<osg::Node&>(node).accept(texture_visitor);
+            texture_visitor.write(osgDB::getFilePath(file_name));
+
+            // apply transforms from ancestor nodes to geometry
+            // optimizer will only do this for transform nodes whose data variance is STATIC so we set it here 
+            MakeTransformsStaticVisitor make_tranforms_static(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN);
+            const_cast<osg::Node&>(node).accept(make_tranforms_static);
+
+            // run the optimizer
+            osgUtil::Optimizer optimizer;
+            optimizer.optimize(&const_cast<osg::Node&>(node), osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS);
+
+
+            aurora::geometry_visitor geom_visitor;
+
+            const_cast<osg::Node&>(node).accept(geom_visitor);
+
+            OSG_INFO << "EXTRACTED " << geom_visitor.get_chunks().size() << " CHUNKS" << std::endl;
+            OSG_INFO << "EXTRACTED " << geom_visitor.get_faces().size() << " FACES" << std::endl;
+            OSG_INFO << "EXTRACTED " << geom_visitor.get_verticies().size() << " VIRTICES" << std::endl;
+            OSG_INFO << "Writing node to AOA file " << file_name << std::endl;
+
+            aurora::aoa_writer file_writer(fs::path(file_name).replace_extension("aod").string());
+            file_writer.save_data(geom_visitor);
+
+            // ======================= DEBUG OUTPUT ============================
+            //write_debug_obj_file(geom_visitor, file_name);
+            //osgDB::writeNodeFile(node, fs::path(file_name).replace_extension("osg").string());
+            //osgDB::writeNodeFile(node, fs::path(file_name).replace_extension("fbx").string());
+            // ==================================================================
         }
-
-        OSG_INFO << "EXTRACTED " << geom_visitor.get_chunks().size() << " CHUNKS" << std::endl;
-        OSG_INFO << "EXTRACTED " << geom_visitor.get_faces().size() << " FACES" << std::endl;
-        OSG_INFO << "EXTRACTED " << geom_visitor.get_verticies().size() << " VIRTICES" << std::endl;
-
-        aurora::aoa_writer file_writer(fs::path(file_name).replace_extension("aod").string());
-        file_writer.save_data(geom_visitor);
-
-
-        // ======================= DEBUG PRINT OBJ ==========================
-        write_debug_obj_file(geom_visitor, file_name);
-
-
-        //config_t config = make_config(file_name, node, config_path(options));
-
-        //print_node_types(const_cast<osg::Node&>(node));
-
-        //osg::ref_ptr<osg::Node> root = perform_preprocessing(config, const_cast<osg::Node&>(node));
-
-        //twin_holder_ptr twins = make_shared<twin_holder>(config);
-        //apply_atlas_builder(*root, twins);
-
-        //auto resource = make_shared<resource_manager>(config, twins);
-
-        //osgDB::ofstream fout(file_name.c_str());
-        //writer_visitor nv(fout, resource);
-
-        //root->accept(nv);
-
-        //resource->write_data();
+        catch(std::exception const& e)
+        {
+            OSG_FATAL << e.what();
+            return WriteResult(WriteResult::ERROR_IN_WRITING_FILE);
+        }
+        catch(const char* e)
+        {
+            OSG_FATAL << e;
+            return WriteResult(WriteResult::ERROR_IN_WRITING_FILE);
+        }
+        catch(...)
+        {
+            OSG_FATAL << "caught unknown exception";
+            return WriteResult(WriteResult::ERROR_IN_WRITING_FILE);
+        }
 
         return WriteResult(WriteResult::FILE_SAVED);
     }
