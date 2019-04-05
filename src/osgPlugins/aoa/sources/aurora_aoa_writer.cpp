@@ -143,7 +143,7 @@ void aoa_writer::save_data(geometry_visitor const& v)
         mesh_geom.params.id = 0;
         mesh_geom.params.offset = chunk.faces_range.lo() * 3;
         mesh_geom.params.count = chunk.faces_range.hi() - chunk.faces_range.lo();
-        mesh_geom.params.base_vertex = 0;
+        mesh_geom.params.base_vertex = chunk.vertex_range.lo();
         mesh_geom.params.mat = material_name_for_node(node_descr.name);
         mesh_geom.params.shadow_mat = "Shadow_Common";
         mesh_geom.params.num_vertices = chunk.vertex_range.hi() - chunk.vertex_range.lo();

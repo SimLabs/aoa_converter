@@ -141,7 +141,7 @@ geom::range_2ui geometry_visitor::collect_faces(geom::range_2ui vertex_range, os
         face face;
         for (unsigned j = 0; j < 3; ++j)
         {
-            face.v[j] = primitive_set.index(i + j) + vertex_range.lo();
+            face.v[j] = primitive_set.index(i + j);
         }
         faces_.push_back(face);
     }
