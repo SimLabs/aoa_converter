@@ -8,6 +8,8 @@ namespace aurora
 
 using vertex_attribute = refl::data_buffer::vao_buffer::vertex_format::vertex_attribute;
 using geometry_buffer_stream = refl::node::controllers_t::control_object_param_data::data_buffer::geometry_buffer_stream;
+using light_buffer_stream = refl::node::controllers_t::control_object_param_data::data_buffer::light_buffer_stream;
+
 using aurora::refl::vertex_attrs::type_t;
 using aurora::refl::vertex_attrs::mode_t;
 
@@ -21,13 +23,14 @@ string material_name_for_node(string node_name)
     return node_name + "_mtl";
 }
 
-refl::node create_root_node(geometry_visitor const& v, string root_name)
+refl::node create_root_node(geometry_visitor const& v, aod::lights_buffer const& lights_buffer, aod::collision_buffer const& col_buffer, string root_name)
 {
     refl::node root_node;
 
     root_node.name = root_name;
     root_node.draw_order = 0;
     root_node.controllers.treat_children = "";
+    root_node.controllers.draw_lightpoint = "";
     root_node.scope = "GLOBAL";
 
     refl::node::controllers_t::control_object_param_data control_object_params;
@@ -44,10 +47,27 @@ refl::node create_root_node(geometry_visitor const& v, string root_name)
     geom_stream.vertex_offset_size.offset = 0;
     geom_stream.vertex_offset_size.size = vertex_offset(v.get_verticies().size());
     geom_stream.lod = 250.;
-
     geometry_streams.geometry_streams.push_back(geom_stream);
 
+    light_buffer_stream omni_lights;
+    omni_lights.light_offset_size.offset = aoa_writer::AOD_HEADER_SIZE + col_buffer.size();
+    omni_lights.light_offset_size.size = lights_buffer.omni_size();
+    omni_lights.type = refl::light_t::OMNI;
+    geometry_streams.light_streams.push_back(omni_lights);
+
+    light_buffer_stream spot_lights;
+    spot_lights.light_offset_size.offset = aoa_writer::AOD_HEADER_SIZE + col_buffer.size() + lights_buffer.omni_size();
+    spot_lights.light_offset_size.size = lights_buffer.spot_size();
+    spot_lights.type = refl::light_t::SPOT;
+    geometry_streams.light_streams.push_back(spot_lights);
+
     root_node.controllers.object_param_controller = control_object_params;
+
+    root_node.lightpoint2 = boost::in_place();
+    if(lights_buffer.omni_lights.size())
+        root_node.lightpoint2->omni_offset_size = refl::offset_size{0, lights_buffer.omni_lights.size()};
+    if(lights_buffer.spot_lights.size())
+        root_node.lightpoint2->spot_offset_size = refl::offset_size{0, lights_buffer.spot_lights.size()};
 
     return root_node;
 }
@@ -59,8 +79,40 @@ void aoa_writer::save_data(geometry_visitor const& v)
     auto const& vertices = v.get_verticies();
     auto const& faces = v.get_faces();
 
-    unsigned collision_buffer_size = 0;
-    unsigned light_buffer_size = 0;
+    aod::collision_buffer collision_buffer;
+    aod::lights_buffer lights_buffer;
+
+    aod::omni_light light;
+    light.position[0] = 0;
+    light.position[1] = -10;
+    light.position[2] = 13.;
+
+    light.power = 1000.;
+    light.color = geom::colorb(255, 0, 0);
+    light.r_min = 255;
+
+    lights_buffer.omni_lights.push_back(light);
+
+    aod::spot_light spot;
+    spot.position[0] = 0;
+    spot.position[1] = -30;
+    spot.position[2] = 13.;
+    spot.power = 1000000;
+    spot.color = geom::color_blue();
+    spot.r_min = 1;
+    spot.dir_x = 0.;
+    spot.dir_y = 1.;
+    spot.dir_z = 0.;
+    spot.mask = 0x7;
+    spot.half_fov = geom::grad2rad(45.);
+    spot.angular_power = 1.;
+
+    lights_buffer.spot_lights.push_back(spot);
+
+    //lights_buffer.spot_lights.resize(200);
+
+    unsigned collision_buffer_size = collision_buffer.size();
+    unsigned light_buffer_size = lights_buffer.size();
     unsigned index_buffer_size = faces.size() * sizeof(std::remove_reference_t<decltype(faces)>::value_type);
     unsigned vertex_buffer_size = vertices.size() * sizeof(std::remove_reference_t<decltype(vertices)>::value_type);
 
@@ -76,8 +128,8 @@ void aoa_writer::save_data(geometry_visitor const& v)
     refl::data_buffer buffer_descr;
     buffer_descr.data_buffer_file = fs::path(filename_).filename().string();
 
-    buffer_descr.index_file_offset_size = { c_GP_HeaderSize, index_buffer_size };
-    buffer_descr.vertex_file_offset_size = { c_GP_HeaderSize + index_buffer_size, vertex_buffer_size };
+    buffer_descr.index_file_offset_size = { AOD_HEADER_SIZE + collision_buffer_size + light_buffer_size, index_buffer_size };
+    buffer_descr.vertex_file_offset_size = { AOD_HEADER_SIZE + collision_buffer_size + light_buffer_size + index_buffer_size, vertex_buffer_size };
 
     refl::data_buffer::vao_buffer vao_descr;
     vao_descr.vertex_format_offset.offset = index_buffer_size;
@@ -112,7 +164,7 @@ void aoa_writer::save_data(geometry_visitor const& v)
     auto const& chunks = v.get_chunks();
     vector<refl::node> all_nodes;
 
-    all_nodes.push_back(create_root_node(v, fs::path(filename_).stem().string()));
+    all_nodes.push_back(create_root_node(v, lights_buffer, collision_buffer, fs::path(filename_).stem().string()));
 
     for(auto const& chunk: chunks)
     {
@@ -173,6 +225,7 @@ void aoa_writer::save_data(geometry_visitor const& v)
 
     // write data
 
+    lights_buffer.write(*this);
     write(faces.data(), index_buffer_size);
     write(vertices.data(), vertex_buffer_size);
 

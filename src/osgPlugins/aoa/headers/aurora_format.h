@@ -4,8 +4,120 @@
 #define DECLARE_AURORA_FIELD(name) \
     constexpr char* Field__## name = "#" #name;
 
+#include "geometry/primitives/color.h"
+#include "geometry/half.h"
+
 namespace aurora
 {
+
+namespace aod
+{
+
+// -- lights packed data struct from AOD files --------------------------------
+#pragma pack(push, 1)
+
+constexpr unsigned COORD_3D = 3;
+
+struct omni_light // NOTE: this struct not used because sAodOmni and  sLightOmniVertex identical
+{
+    // from aurora sources
+    struct raw_data
+    {
+        // forbid usage
+        raw_data() = delete;
+        float        fPos[COORD_3D];
+        float        fPower;
+        unsigned     uiData;        // color, Rmin
+        unsigned     m_uiRefPowerMul;
+    };
+
+    float         position[COORD_3D];
+    float         power;
+
+    // word 1
+    geom::colorb color;
+    uint8_t      r_min;
+    // word 2
+    uint32_t     power_mul = 0;
+};
+
+static_assert(sizeof(omni_light::raw_data) == sizeof(omni_light), "sizes differ");
+
+struct spot_light
+{
+    // from aurora sources
+    struct raw_data
+    {
+        // forbid usage
+        raw_data() = delete;
+        float        fPos[COORD_3D];
+        float        fPower;
+        unsigned     uiData;     // color, Rmin
+        unsigned     uiData1;    // dir.xy
+        unsigned     uiData2;    // dir.z, mask
+        unsigned     uiData3;    // half fov, angular power
+        unsigned     m_uiRefPowerMul;
+    };
+
+    float        position[COORD_3D];
+    float        power;
+    // word 1
+    geom::colorb color;
+    uint8_t      r_min;
+    // word 2
+    geom::half dir_x, dir_y;
+    // word 3
+    geom::half dir_z;
+    uint16_t   mask = 0x7; // 0x7 enables everything
+    // word 4
+    geom::half half_fov;
+    geom::half angular_power;
+    // word 5
+    uint32_t   power_mul = 0;
+};
+
+static_assert(sizeof(spot_light::raw_data) == sizeof(spot_light), "sizes differ");
+
+struct lights_buffer
+{
+    vector<omni_light> omni_lights;
+    vector<spot_light> spot_lights;
+
+    size_t size() const
+    {
+        return omni_size() + spot_size();
+    }
+
+    template<class T>
+    void write(T& out) const
+    {
+        out.write(reinterpret_cast<const char*>(omni_lights.data()), omni_size());
+        out.write(reinterpret_cast<const char*>(spot_lights.data()), spot_size());
+    }
+
+    size_t omni_size() const
+    {
+        return sizeof(std::remove_reference_t<decltype(this->omni_lights)>::value_type) * omni_lights.size();
+    }
+
+    size_t spot_size() const
+    {
+        return sizeof(std::remove_reference_t<decltype(this->spot_lights)>::value_type) * spot_lights.size();
+    }
+};
+
+struct collision_buffer
+{
+    size_t size() const
+    {
+        return 0u;
+    }
+};
+
+#pragma pack(pop)
+
+} // aod
+
 namespace refl
 {
 
@@ -53,6 +165,16 @@ DECLARE_AURORA_FIELD(CONTROL_NUMBER)
 DECLARE_AURORA_FIELD(CONTROL_OBJECT_PARAM_DATA)
 DECLARE_AURORA_FIELD(CONTROL_TREAT_CHILDS)
 DECLARE_AURORA_FIELD(CONTROL_DRAW_MESH)
+DECLARE_AURORA_FIELD(CONTROL_DRAW_LIGHTPOINT)
+
+DECLARE_AURORA_FIELD(LIGHTS_FILE_OFFSET_SIZE)
+DECLARE_AURORA_FIELD(LIGHTS_TYPE)
+DECLARE_AURORA_FIELD(LIGHT_BUFFER_STREAM)
+DECLARE_AURORA_FIELD(LIGHTS_STREAM_NUM_ELEM)
+
+DECLARE_AURORA_FIELD(LIGHTPOINT2)
+DECLARE_AURORA_FIELD(OMNI)
+DECLARE_AURORA_FIELD(SPOT)
 
 struct aurora_vector_field_tag
 {
@@ -133,15 +255,24 @@ ENUM_DECL(vertex_attrs::mode_t)
     ENUM_DECL_ENTRY(ATTR_MODE_PACKED)
 ENUM_DECL_END()
 
-
 }
 
 enum node_scope_t {
     GLOBAL
 };
 
+enum light_t
+{
+    OMNI, SPOT
+};
+
 ENUM_DECL(node_scope_t)
     ENUM_DECL_ENTRY(GLOBAL)
+ENUM_DECL_END()
+
+ENUM_DECL(light_t)
+    ENUM_DECL_ENTRY(OMNI)
+    ENUM_DECL_ENTRY(SPOT)
 ENUM_DECL_END()
 
 struct offset_size
@@ -333,10 +464,23 @@ struct node
                     REFL_END()
                 };
 
+                struct light_buffer_stream
+                {
+                    offset_size light_offset_size;
+                    light_t     type;
+
+                    REFL_INNER(light_buffer_stream)
+                        REFL_ENTRY_NAMED(light_offset_size, Field__LIGHTS_FILE_OFFSET_SIZE)
+                        REFL_AS_TYPE_NAMED(type, string, Field__LIGHTS_TYPE)
+                    REFL_END()
+                };
+
                 vector<geometry_buffer_stream> geometry_streams;
+                vector<light_buffer_stream>    light_streams;
 
                 REFL_INNER(data_buffer)
                     REFL_ENTRY_NAMED_WITH_TAG(geometry_streams, Field__GEOMETRY_BUFFER_STREAM, aurora_vector_field_tag(Field__GEOMETRY_STREAM_NUM_ELEM))
+                    REFL_ENTRY_NAMED_WITH_TAG(light_streams, Field__LIGHT_BUFFER_STREAM, aurora_vector_field_tag(Field__LIGHTS_STREAM_NUM_ELEM))
                 REFL_END()
             };
         
@@ -358,12 +502,14 @@ struct node
         {
             return count_field(object_param_controller) +
                    count_field(treat_children) +
-                   count_field(draw_mesh);
+                   count_field(draw_mesh) +
+                   count_field(draw_lightpoint);
         }
 
         optional<control_object_param_data> object_param_controller;
         optional<string>                    treat_children;
         optional<string>                    draw_mesh;
+        optional<string>                    draw_lightpoint;
 
         REFL_INNER(controllers_t)
             auto size = lobj.num_controllers();
@@ -371,6 +517,18 @@ struct node
             REFL_ENTRY_NAMED(object_param_controller, Field__CONTROL_OBJECT_PARAM_DATA)
             REFL_ENTRY_NAMED(treat_children, Field__CONTROL_TREAT_CHILDS)
             REFL_ENTRY_NAMED(draw_mesh, Field__CONTROL_DRAW_MESH)
+            REFL_ENTRY_NAMED(draw_lightpoint, Field__CONTROL_DRAW_LIGHTPOINT)
+        REFL_END()
+    };
+
+    struct lightpoint2
+    {
+        optional<offset_size> omni_offset_size;
+        optional<offset_size> spot_offset_size;
+
+        REFL_INNER(lightpoint2)
+            REFL_ENTRY_NAMED(omni_offset_size, Field__OMNI)
+            REFL_ENTRY_NAMED(spot_offset_size, Field__SPOT)
         REFL_END()
     };
 
@@ -381,6 +539,7 @@ struct node
     node_children children;
     optional<mesh_t> mesh;
     controllers_t controllers;
+    optional<lightpoint2> lightpoint2;
 
     REFL_INNER(node)
         REFL_ENTRY_NAMED(name, Field__NODE_NAME)
@@ -389,6 +548,7 @@ struct node
         REFL_ENTRY_NAMED(children, Field__NODE_CHILDS)
         REFL_ENTRY_NAMED(controllers, Field__CONTROLLERS)
         REFL_ENTRY_NAMED(mesh, Field__MESH)
+        REFL_ENTRY_NAMED(lightpoint2, Field__LIGHTPOINT2)
     REFL_END()
 };
 
