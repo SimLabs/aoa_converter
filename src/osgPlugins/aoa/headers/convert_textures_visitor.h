@@ -61,7 +61,7 @@ struct convert_textures_visitor: osg::NodeVisitor
             if(image.valid())
             {
                 std::string name = osgDB::getStrippedName(image->getFileName());
-                name += ".bmp";
+                name += ".dds";
                 image->setFileName(name);
                 std::string path = dir.empty() ? name : osgDB::concatPaths(dir, name);
                 osgDB::writeImageFile(*image, path);
