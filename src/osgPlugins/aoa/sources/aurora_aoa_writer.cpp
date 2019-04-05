@@ -192,14 +192,25 @@ void write_material(chunk_info_opt_material const & info, refl::material_list& m
 {
     refl::material_list::material mat;
     mat.name = material_name_for_node(info.name);
-    mat.link = "__D";
+
+    switch(info.material.textures.size())
+    {
+        case 0:
+        case 1:
+            mat.link = "__D";
+            break;
+        case 2:
+            mat.link = "__DN";
+            break;
+        case 3:
+        default:
+            mat.link = "__DEAFG";
+            break;
+    }
 
     for(unsigned i = 0; i < info.material.textures.size(); i++)
     {
         mat.textures.push_back(refl::material_list::material::material_group{i, info.material.textures[i]});
-
-        // TODO only diffuse for now
-        break;
     }
 
     mats.list.push_back(mat);
