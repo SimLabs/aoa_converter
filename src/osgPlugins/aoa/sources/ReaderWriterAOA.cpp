@@ -49,6 +49,7 @@
 #include "aurora_aoa_writer.h"
 #include "convert_textures_visitor.h"
 
+using namespace aurora;
 
 class MakeTransformsStaticVisitor: public osg::NodeVisitor
 {
@@ -167,7 +168,60 @@ public:
             OSG_INFO << "Writing node to AOA file " << file_name << std::endl;
 
             aurora::aoa_writer file_writer(fs::path(file_name).replace_extension("aod").string());
-            file_writer.save_data(geom_visitor);
+            vector<aod::omni_light> omni_lights;
+            vector<aod::spot_light> spot_lights;
+
+            aod::omni_light light;
+            light.position[0] = 0;
+            light.position[1] = -10;
+            light.position[2] = 13.;
+
+            light.power = 1000.;
+            light.color = geom::colorb(255, 0, 0);
+            light.r_min = 255;
+
+            omni_lights.push_back(light);
+
+
+            aod::spot_light spot;
+            spot.position[0] = 0;
+            spot.position[1] = -30;
+            spot.position[2] = 13.;
+            spot.power = 1000000;
+            spot.color = geom::color_blue();
+            spot.r_min = 1;
+            spot.dir_x = 0.;
+            spot.dir_y = 1.;
+            spot.dir_z = 0.;
+            spot.mask = 0x7;
+            spot.half_fov = geom::grad2rad(45.);
+            spot.angular_power = 1.;
+
+            spot_lights.push_back(spot);
+
+            file_writer.set_omni_lights_buffer_data(omni_lights);
+            file_writer.set_spot_lights_buffer_data(spot_lights);
+            file_writer.set_index_buffer_data(geom_visitor.get_faces());
+            file_writer.set_vertex_buffer_data(geom_visitor.get_verticies());
+
+            aoa_writer::node_ptr root = file_writer.create_root_node(fs::path(file_name).stem().string());
+
+            if(omni_lights.size())
+                root->set_omni_lights(0, omni_lights.size());
+            if(spot_lights.size())
+                root->set_spot_lights(0, spot_lights.size());
+
+            for(auto const& chunk : geom_visitor.get_chunks())
+            {
+                file_writer.add_material(chunk.name, chunk.material);
+                root->create_child(chunk.name)
+                    ->add_mesh(chunk.aabb, chunk.faces_range.lo() * 3,
+                               chunk.faces_range.hi() - chunk.faces_range.lo(),
+                               chunk.vertex_range.lo(),
+                               chunk.vertex_range.hi() - chunk.vertex_range.lo());
+            }
+
+            file_writer.save_data();
 
             // ======================= DEBUG OUTPUT ============================
             //write_debug_obj_file(geom_visitor, file_name);

@@ -4,119 +4,8 @@
 #define DECLARE_AURORA_FIELD(name) \
     constexpr char* Field__## name = "#" #name;
 
-#include "geometry/primitives/color.h"
-#include "geometry/half.h"
-
 namespace aurora
 {
-
-namespace aod
-{
-
-// -- lights packed data struct from AOD files --------------------------------
-#pragma pack(push, 1)
-
-constexpr unsigned COORD_3D = 3;
-
-struct omni_light // NOTE: this struct not used because sAodOmni and  sLightOmniVertex identical
-{
-    // from aurora sources
-    struct raw_data
-    {
-        // forbid usage
-        raw_data() = delete;
-        float        fPos[COORD_3D];
-        float        fPower;
-        unsigned     uiData;        // color, Rmin
-        unsigned     m_uiRefPowerMul;
-    };
-
-    float         position[COORD_3D];
-    float         power;
-
-    // word 1
-    geom::colorb color;
-    uint8_t      r_min;
-    // word 2
-    uint32_t     power_mul = 0;
-};
-
-static_assert(sizeof(omni_light::raw_data) == sizeof(omni_light), "sizes differ");
-
-struct spot_light
-{
-    // from aurora sources
-    struct raw_data
-    {
-        // forbid usage
-        raw_data() = delete;
-        float        fPos[COORD_3D];
-        float        fPower;
-        unsigned     uiData;     // color, Rmin
-        unsigned     uiData1;    // dir.xy
-        unsigned     uiData2;    // dir.z, mask
-        unsigned     uiData3;    // half fov, angular power
-        unsigned     m_uiRefPowerMul;
-    };
-
-    float        position[COORD_3D];
-    float        power;
-    // word 1
-    geom::colorb color;
-    uint8_t      r_min;
-    // word 2
-    geom::half dir_x, dir_y;
-    // word 3
-    geom::half dir_z;
-    uint16_t   mask = 0x7; // 0x7 enables everything
-    // word 4
-    geom::half half_fov;
-    geom::half angular_power;
-    // word 5
-    uint32_t   power_mul = 0;
-};
-
-static_assert(sizeof(spot_light::raw_data) == sizeof(spot_light), "sizes differ");
-
-struct lights_buffer
-{
-    vector<omni_light> omni_lights;
-    vector<spot_light> spot_lights;
-
-    size_t size() const
-    {
-        return omni_size() + spot_size();
-    }
-
-    template<class T>
-    void write(T& out) const
-    {
-        out.write(reinterpret_cast<const char*>(omni_lights.data()), omni_size());
-        out.write(reinterpret_cast<const char*>(spot_lights.data()), spot_size());
-    }
-
-    size_t omni_size() const
-    {
-        return sizeof(std::remove_reference_t<decltype(this->omni_lights)>::value_type) * omni_lights.size();
-    }
-
-    size_t spot_size() const
-    {
-        return sizeof(std::remove_reference_t<decltype(this->spot_lights)>::value_type) * spot_lights.size();
-    }
-};
-
-struct collision_buffer
-{
-    size_t size() const
-    {
-        return 0u;
-    }
-};
-
-#pragma pack(pop)
-
-} // aod
 
 namespace refl
 {
@@ -535,7 +424,7 @@ struct node
     quoted_string name;
     optional<string> scope;
     unsigned flags;
-    unsigned draw_order;
+    unsigned draw_order = 0;
     node_children children;
     optional<mesh_t> mesh;
     controllers_t controllers;
