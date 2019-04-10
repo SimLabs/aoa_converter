@@ -91,10 +91,10 @@ struct uni_cast<boost::any, T>
     }
 };
 
-template<class T>
-struct uni_cast<string, T, typename std::enable_if<std::is_enum<T>::value>::type>
+template<class T, class Source>
+struct uni_cast<Source, T, typename std::enable_if<std::is_enum<T>::value>::type>
 {
-    static T apply(string const& source)
+    static T apply(Source const& source)
     {
         auto res = cpp_utils::string_to_enum<T>(source);
         Verify(res);
@@ -102,10 +102,10 @@ struct uni_cast<string, T, typename std::enable_if<std::is_enum<T>::value>::type
     }
 };
 
-template<class S>
-struct uni_cast<S, string, typename std::enable_if<std::is_enum<S>::value>::type>
+template<class S, class Target>
+struct uni_cast<S, Target, typename std::enable_if<std::is_enum<S>::value>::type>
 {
-    static string apply(S const& source)
+    static Target apply(S const& source)
     {
         return cpp_utils::enum_to_string(source);
     }

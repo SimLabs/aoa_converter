@@ -40,6 +40,9 @@ template<class processor>                       \
 #define REFL_ENTRY_NAMED(entry, name)           \
     proc(lobj.entry, robj.entry, name);
 
+#define REFL_ENTRY_NAMED_WITH_TAG(entry, name, tag) \
+    proc(lobj.entry, robj.entry, name, tag);
+
 #define REFL_ENTRY(entry)                       \
     proc(lobj.entry, robj.entry, #entry);    
 
@@ -47,12 +50,16 @@ template<class processor>                       \
     reflect2(proc, (base&)lobj, (base&)robj);
 
 #define REFL_AS_TYPE_NAMED(entry, type, name)   \
-    refl::process_as_type<type>                 \
+    ::refl::process_as_type<type>                 \
         (proc, lobj.entry, robj.entry, name);
 
 #define REFL_AS_TYPE(entry, type)               \
-    refl::process_as_type<type>                 \
+    ::refl::process_as_type<type>                 \
     (proc, lobj.entry, robj.entry, #entry);
+
+#define REFL_AS_TYPE_WITH_TAG(entry, type, tag)               \
+    ::refl::process_as_type<type>                 \
+    (proc, lobj.entry, robj.entry, #entry, tag);
 
 #define REFL_ENTRY_TAG(entry, tag)              \
     proc(lobj.entry, robj.entry, #entry, tag);
@@ -65,6 +72,8 @@ template<class processor>                       \
     {                                                              \
         typedef name enum_type;                                    \
         const static std::vector<std::pair<enum_type, std::string>> m = {
+
+#define ENUM_DECL_INNER(name) friend ENUM_DECL(name)
 
 #define ENUM_DECL_ENTRY(e) \
     { e, #e },
