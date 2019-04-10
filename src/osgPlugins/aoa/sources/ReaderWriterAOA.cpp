@@ -143,6 +143,15 @@ public:
 
         try 
         {
+            osg::ref_ptr<osg::MatrixTransform> transform = new osg::MatrixTransform(osg::Matrix(-1, 0, 0, 0, 
+                                                                                                 0, 0, 1, 0,
+                                                                                                 0, 1, 0, 0,  
+                                                                                                 0, 0, 0, 1));
+
+            osg::Node& osg_root = (options && options->getOptionString().find("--aoa-flip-yz") != std::string::npos) ?  *transform : const_cast<osg::Node&>(node);
+
+            transform->addChild(const_cast<osg::Node*>(&node));
+
             // convert all textures to bmp
             aurora::convert_textures_visitor texture_visitor;
             const_cast<osg::Node&>(node).accept(texture_visitor);
@@ -151,16 +160,16 @@ public:
             // apply transforms from ancestor nodes to geometry
             // optimizer will only do this for transform nodes whose data variance is STATIC so we set it here 
             MakeTransformsStaticVisitor make_tranforms_static(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN);
-            const_cast<osg::Node&>(node).accept(make_tranforms_static);
+            osg_root.accept(make_tranforms_static);
 
             // run the optimizer
             osgUtil::Optimizer optimizer;
-            optimizer.optimize(&const_cast<osg::Node&>(node), osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS);
+            optimizer.optimize(&osg_root, osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS);
 
 
             aurora::geometry_visitor geom_visitor;
 
-            const_cast<osg::Node&>(node).accept(geom_visitor);
+            osg_root.accept(geom_visitor);
 
             OSG_INFO << "EXTRACTED " << geom_visitor.get_chunks().size() << " CHUNKS" << std::endl;
             OSG_INFO << "EXTRACTED " << geom_visitor.get_faces().size() << " FACES" << std::endl;
