@@ -62,6 +62,8 @@ SET(FBX_LIBNAME_DEBUG ${FBX_LIBNAME}d)
 
 SET( FBX_SEARCH_PATHS
     $ENV{FBX_DIR}
+    "$ENV{ProgramW6432}/Autodesk/FBX/FBX SDK/2019.2"
+    "$ENV{PROGRAMFILES}/Autodesk/FBX/FBX SDK/2019.2"
     "$ENV{ProgramW6432}/Autodesk/FBX/FBX SDK/2019.0"
     "$ENV{PROGRAMFILES}/Autodesk/FBX/FBX SDK/2019.0"
     "/Applications/Autodesk/FBX\ SDK/2019.0"
