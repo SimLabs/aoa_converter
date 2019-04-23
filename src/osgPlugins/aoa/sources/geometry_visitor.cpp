@@ -159,7 +159,7 @@ void geometry_visitor::extract_texture_info(osg::Drawable& node, chunk_info_opt_
         for(unsigned int i = 0; i < stateset->getTextureAttributeList().size(); ++i)
         {
             osg::Texture2D* texture = dynamic_cast<osg::Texture2D*>(stateset->getTextureAttribute(i, osg::StateAttribute::TEXTURE));
-            if(texture)
+            if(texture && texture->getImage())
             {
                 chunk.material.textures.push_back(texture->getImage()->getFileName());
             }

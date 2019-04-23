@@ -60,10 +60,11 @@ struct convert_textures_visitor: osg::NodeVisitor
             osg::ref_ptr<osg::Image> image = texture2D ? texture2D->getImage() : (texture3D ? texture3D->getImage() : 0);
             if(image.valid())
             {
-                std::string name = osgDB::getStrippedName(image->getFileName());
-                name += ".dds";
+                std::string name = fs::path(image->getFileName()).replace_extension("dds").string();
                 image->setFileName(name);
                 std::string path = dir.empty() ? name : osgDB::concatPaths(dir, name);
+                if(fs::path(path).has_parent_path())
+                    fs::create_directories(fs::path(path).parent_path());
                 osgDB::writeImageFile(*image, path);
                 osg::notify(osg::NOTICE) << "Image written to '" << path << "'." << std::endl;
             }

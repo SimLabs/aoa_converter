@@ -48,6 +48,7 @@
 #include "geometry_visitor.h"
 #include "aurora_aoa_writer.h"
 #include "convert_textures_visitor.h"
+#include "fix_materials_visitor.h"
 
 using namespace aurora;
 
@@ -147,10 +148,41 @@ public:
                                                                                                  0, 0, 1, 0,
                                                                                                  0, 1, 0, 0,  
                                                                                                  0, 0, 0, 1));
-
-            osg::Node& osg_root = (options && options->getOptionString().find("--aoa-flip-yz") != std::string::npos) ?  *transform : const_cast<osg::Node&>(node);
-
             transform->addChild(const_cast<osg::Node*>(&node));
+
+            std::vector<std::string> split_opts;
+            vector<char*> argv;
+            // dummy value, cause first argument must be present
+            argv.push_back("aoa-plugin");
+            int argc = argv.size();
+
+            if(options)
+            {
+                using boost::tokenizer;
+                using boost::escaped_list_separator;
+                using so_tokenizer = tokenizer<escaped_list_separator<char>>;
+
+                so_tokenizer tok(options->getOptionString(), escaped_list_separator<char>('\\', ' ', '\"'));
+                for(so_tokenizer::iterator beg = tok.begin(); beg != tok.end(); ++beg)
+                {
+                    split_opts.push_back(*beg);
+                }
+                std::transform(begin(split_opts), end(split_opts), back_inserter(argv), [](auto& s){ return const_cast<char*>(s.data()); });
+                argc = argv.size();
+            }
+
+            osg::ArgumentParser arguments(&argc, argv.data());
+
+            bool flip_yz = arguments.read("--aoa-flip-yz");
+            osg::Node& osg_root = flip_yz ?  *transform : const_cast<osg::Node&>(node);
+            OSG_INFO << "flip Y and Z: " << flip_yz << "\n";
+
+            string materials_file;
+            if(arguments.read("--aoa-materials-file", materials_file))
+            {
+                fix_materials_visitor fix_mats_vis(materials_file, fs::path(materials_file).parent_path().string());
+                osg_root.accept(fix_mats_vis);
+            }
 
             // convert all textures to bmp
             aurora::convert_textures_visitor texture_visitor;
