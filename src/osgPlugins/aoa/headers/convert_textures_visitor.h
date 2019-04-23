@@ -14,26 +14,13 @@ struct convert_textures_visitor: osg::NodeVisitor
         osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN)
     {}
 
-    virtual void apply(osg::Node& node)
+    virtual void apply(osg::Node& node) override
     {
         if(node.getStateSet()) apply(*node.getStateSet());
         traverse(node);
     }
 
-    virtual void apply(osg::Geode& node)
-    {
-        if(node.getStateSet()) apply(*node.getStateSet());
-
-        for(unsigned int i = 0; i < node.getNumDrawables(); ++i)
-        {
-            osg::Drawable* drawable = node.getDrawable(i);
-            if(drawable && drawable->getStateSet()) apply(*drawable->getStateSet());
-        }
-
-        traverse(node);
-    }
-
-    virtual void apply(osg::StateSet& stateset)
+    void apply(osg::StateSet& stateset)
     {
         // search for the existence of any texture object attributes
         for(unsigned int i = 0; i < stateset.getTextureAttributeList().size(); ++i)
