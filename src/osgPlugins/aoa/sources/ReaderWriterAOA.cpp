@@ -23,6 +23,7 @@
 
 #include <osgDB/Registry>
 #include <osgDB/ReadFile>
+#include <osgDB/WriteFile>
 #include <osgDB/FileUtils>
 #include <osgDB/FileNameUtils>
 
@@ -55,6 +56,11 @@ using namespace aurora;
 class MakeTransformsStaticVisitor: public osg::NodeVisitor
 {
     using osg::NodeVisitor::NodeVisitor;
+
+    void apply(osg::Node& node) override
+    {
+        traverse(node);
+    }
 
     void apply(osg::Transform& t) override
     {
@@ -266,8 +272,8 @@ public:
 
             // ======================= DEBUG OUTPUT ============================
             //write_debug_obj_file(geom_visitor, file_name);
-            //osgDB::writeNodeFile(node, fs::path(file_name).replace_extension("osg").string());
-            //osgDB::writeNodeFile(node, fs::path(file_name).replace_extension("fbx").string());
+            //osgDB::writeNodeFile(osg_root, fs::path(file_name).replace_extension("osg").string());
+            //osgDB::writeNodeFile(osg_root, fs::path(file_name).replace_extension("fbx").string());
             // ==================================================================
         }
         catch(std::exception const& e)
