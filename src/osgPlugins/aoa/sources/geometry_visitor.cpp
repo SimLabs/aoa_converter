@@ -3,12 +3,14 @@
 //#include "utils.h"
 #include <osg/Texture2D>
 #include <osg/StateSet>
+#include <osg/Material>
 
 namespace aurora
 {
 
-geometry_visitor::geometry_visitor()
+geometry_visitor::geometry_visitor(material_loader& l)
     : osg::NodeVisitor(TRAVERSE_ALL_CHILDREN)
+    , material_loader_(l)
     , current_geode_(nullptr)
     , finalized_    (false)
     //, material_manager_(material_manager)
@@ -155,14 +157,38 @@ void geometry_visitor::extract_texture_info(osg::Drawable& node, chunk_info_opt_
     osg::Drawable* drawable = &node;
     if(drawable && drawable->getStateSet())
     {
-        osg::StateSet* stateset = drawable->getStateSet();
-        for(unsigned int i = 0; i < stateset->getTextureAttributeList().size(); ++i)
+        osg::StateSet* state_set = drawable->getStateSet();
+
+        osg::Material* mat = (osg::Material*) state_set->getAttribute(osg::StateAttribute::MATERIAL);
+
+        if(!mat)
         {
-            osg::Texture2D* texture = dynamic_cast<osg::Texture2D*>(stateset->getTextureAttribute(i, osg::StateAttribute::TEXTURE));
-            if(texture && texture->getImage())
+            OSG_WARN << "AOA plugin: no material in node \"" << node.getName() << "\" skipping \n";
+            return;
+        }
+
+        auto mat_data = material_loader_.get_material_data(mat->getName());
+
+        if(!mat_data)
+        {
+            OSG_WARN << "AOA plugin: material \"" << mat->getName() << "\" not found, skipping\n";
+            return;
+        }
+
+        if(mat_data->explicit_material.empty())
+        {
+            for(unsigned int i = 0; i < state_set->getTextureAttributeList().size(); ++i)
             {
-                chunk.material.textures.push_back(texture->getImage()->getFileName());
-            }
+                osg::Texture2D* texture = dynamic_cast<osg::Texture2D*>(state_set->getTextureAttribute(i, osg::StateAttribute::TEXTURE));
+                if(texture && texture->getImage())
+                {
+                    chunk.material.textures.push_back(texture->getImage()->getFileName());
+                }
+            }            
+        }
+        else
+        {
+            chunk.material.explicit_material = mat_data->explicit_material;
         }
     }
 

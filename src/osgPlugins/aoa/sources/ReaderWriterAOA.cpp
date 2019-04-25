@@ -69,6 +69,18 @@ class MakeTransformsStaticVisitor: public osg::NodeVisitor
     }
 };
 
+string material_name_for_chunk(string name, material_info const& data)
+{
+    if(!data.explicit_material.empty())
+    {
+        return data.explicit_material;
+    } 
+    else 
+    {
+        return name + "_mtl";
+    }
+}
+
 class ReaderWriterAOA : public osgDB::ReaderWriter
 {
 public:
@@ -184,11 +196,14 @@ public:
             OSG_INFO << "flip Y and Z: " << flip_yz << "\n";
 
             string materials_file;
-            if(arguments.read("--aoa-materials-file", materials_file))
-            {
-                fix_materials_visitor fix_mats_vis(materials_file, fs::path(materials_file).parent_path().string());
-                osg_root.accept(fix_mats_vis);
-            }
+            arguments.read("--aoa-materials-file", materials_file);
+            if(materials_file.empty())
+                OSG_WARN << "AOA plugin: materials file is not specified\n";
+    
+            material_loader mat_loader(materials_file);
+
+            fix_materials_visitor fix_mats_vis(mat_loader, fs::path(materials_file).parent_path().string());
+            osg_root.accept(fix_mats_vis);
 
             // convert all textures to bmp
             aurora::convert_textures_visitor texture_visitor;
@@ -205,7 +220,7 @@ public:
             optimizer.optimize(&osg_root, osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS);
 
 
-            aurora::geometry_visitor geom_visitor;
+            aurora::geometry_visitor geom_visitor(mat_loader);
 
             osg_root.accept(geom_visitor);
 
@@ -260,12 +275,13 @@ public:
 
             for(auto const& chunk : geom_visitor.get_chunks())
             {
-                file_writer.add_material(chunk.name, chunk.material);
+                file_writer.add_material(material_name_for_chunk(chunk.name, chunk.material), chunk.material);
                 root->create_child(chunk.name)
                     ->add_mesh(chunk.aabb, chunk.faces_range.lo() * 3,
                                chunk.faces_range.hi() - chunk.faces_range.lo(),
                                chunk.vertex_range.lo(),
-                               chunk.vertex_range.hi() - chunk.vertex_range.lo());
+                               chunk.vertex_range.hi() - chunk.vertex_range.lo(),
+                               material_name_for_chunk(chunk.name, chunk.material));
             }
 
             file_writer.save_data();

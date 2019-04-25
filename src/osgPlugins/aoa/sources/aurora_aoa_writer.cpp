@@ -18,8 +18,8 @@ constexpr uint32_t c_GP_Version = 300;
 constexpr uint32_t c_GP_BaseFileMarker = ('D' << 8) | 'O';
 constexpr uint32_t AOD_HEADER_SIZE = sizeof(c_GP_Version) + sizeof(c_GP_BaseFileMarker) + 4 * sizeof(uint32_t);
 
-auto index_offset = [](unsigned len) { return len * sizeof(face); };
-auto vertex_offset = [](unsigned len) { return len * sizeof(vertex_info); };
+auto index_offset = [](unsigned len) -> unsigned { return len * sizeof(face); };
+auto vertex_offset = [](unsigned len) -> unsigned { return len * sizeof(vertex_info); };
 
 struct lights_buffer
 {
@@ -201,15 +201,21 @@ aoa_writer::node_ptr aoa_writer::create_root_node(string name)
     return pimpl_->roots_.back()->set_name(name)
         ->add_flags(aoa_writer::GLOBAL_NODE)
         ->add_flags(aoa_writer::TREAT_CHILDREN)
-        ->add_geometry_stream(250., { 0, vertex_offset(pimpl_->vertex_buffer_data_.size()) }, { 0, index_offset(pimpl_->index_buffer_data_.size()) })
+        ->add_geometry_stream(250., 
+            { 0, vertex_offset(pimpl_->vertex_buffer_data_.size()) }, 
+            { 0, index_offset(pimpl_->index_buffer_data_.size()) })
         ->add_omnilights_stream(AOD_HEADER_SIZE + pimpl_->collision_buffer_.size(),  pimpl_->lights_buffer_.omni_size())
         ->add_spotlights_stream(AOD_HEADER_SIZE + pimpl_->collision_buffer_.size() + pimpl_->lights_buffer_.omni_size(), pimpl_->lights_buffer_.spot_size());
 }
 
 aoa_writer & aoa_writer::add_material(string name, material_info const & mat)
 {
+    // don't generate material
+    if(!mat.explicit_material.empty())
+        return *this;
+
     refl::material_list::material mat_descr;
-    mat_descr.name = material_name_for_node(name);
+    mat_descr.name = name;
 
     switch(mat.textures.size())
     {

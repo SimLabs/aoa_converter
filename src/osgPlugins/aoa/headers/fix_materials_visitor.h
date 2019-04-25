@@ -4,9 +4,11 @@
 namespace aurora
 {
 
+struct material_loader;
+
 struct fix_materials_visitor: osg::NodeVisitor
 {
-    fix_materials_visitor(string materials_file, string relative_dir);
+    fix_materials_visitor(material_loader& l, string relative_dir);
     ~fix_materials_visitor();
 
     void apply(osg::Geometry& g) override;

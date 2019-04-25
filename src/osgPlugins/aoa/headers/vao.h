@@ -58,6 +58,7 @@ struct material_info
 {
     // ordered list of texture unit (index in vector) -> filename
     vector<string> textures;
+    string explicit_material;
 
     material_info()
     {}

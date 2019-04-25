@@ -8,6 +8,7 @@
 //#include "data.h"
 //#include "material_manager.h"
 
+#include "material_loader.h"
 #include "vao.h"
 
 namespace aurora
@@ -15,7 +16,7 @@ namespace aurora
 
 struct geometry_visitor : osg::NodeVisitor
 {
-    geometry_visitor();
+    geometry_visitor(material_loader&);
 
     void apply(osg::Geode    &geode)    override;
     void apply(osg::Geometry &geometry) override;
@@ -40,6 +41,7 @@ private:
 
 private:
     // geode -> indicies of chunks with optional material
+    material_loader&                       material_loader_;
     map<osg::Geode const*, vector<size_t>> geode2chunks_;
     osg::Geode const*                      current_geode_;
     

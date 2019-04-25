@@ -110,7 +110,7 @@ aoa_writer::node_ptr aoa_writer::node::add_spotlights_stream(unsigned offset, un
     return shared_from_this();
 }
 
-aoa_writer::node_ptr aoa_writer::node::add_mesh(geom::rectangle_3f bbox, unsigned offset, unsigned count, unsigned base_vertex, unsigned num_vertices, std::pair<unsigned, unsigned> vao_ref)
+aoa_writer::node_ptr aoa_writer::node::add_mesh(geom::rectangle_3f bbox, unsigned offset, unsigned count, unsigned base_vertex, unsigned num_vertices, string material, string shadow_material, std::pair<unsigned, unsigned> vao_ref)
 {
     if(!pimpl_->node_descr.mesh)
     {
@@ -127,8 +127,8 @@ aoa_writer::node_ptr aoa_writer::node::add_mesh(geom::rectangle_3f bbox, unsigne
     mesh_geom.params.offset = offset;
     mesh_geom.params.count = count;
     mesh_geom.params.base_vertex = base_vertex;
-    mesh_geom.params.mat = material_name_for_node(pimpl_->node_descr.name);
-    mesh_geom.params.shadow_mat = "Shadow_Common";
+    mesh_geom.params.mat = material;
+    mesh_geom.params.shadow_mat = shadow_material;
     mesh_geom.params.num_vertices = num_vertices;
 
     mesh.vao_ref.geom_stream_id = vao_ref.first;

@@ -96,11 +96,6 @@ struct aoa_writer
     struct node;
     using node_ptr = std::shared_ptr<node>;
 
-    static string material_name_for_node(string node_name)
-    {
-        return node_name + "_mtl";
-    }
-
     void set_index_buffer_data(vector<face> const& data);
     void set_vertex_buffer_data(vector<vertex_info> const& data);
     void set_omni_lights_buffer_data(vector<aod::omni_light> const& data);
@@ -121,7 +116,7 @@ struct aoa_writer
         node_ptr add_flags(uint32_t flags);
         node_ptr set_draw_order(unsigned order);
 
-        node_ptr add_mesh(geom::rectangle_3f bbox, unsigned offset, unsigned count, unsigned base_vertex, unsigned num_vertices, std::pair<unsigned, unsigned> vao_ref = {0, 0});
+        node_ptr add_mesh(geom::rectangle_3f bbox, unsigned offset, unsigned count, unsigned base_vertex, unsigned num_vertices, string material, string shadow_material = "Shadow_Common", std::pair<unsigned, unsigned> vao_ref = {0, 0});
         node_ptr set_omni_lights(unsigned offset, unsigned size);
         node_ptr set_spot_lights(unsigned offset, unsigned size);
 
