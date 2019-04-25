@@ -50,6 +50,7 @@
 #include "aurora_aoa_writer.h"
 #include "convert_textures_visitor.h"
 #include "fix_materials_visitor.h"
+#include "debug_utils.h"
 
 using namespace aurora;
 
@@ -70,6 +71,40 @@ struct make_transforms_static_visitor: osg::NodeVisitor
         t.setDataVariance(osg::Object::DataVariance::STATIC);
         traverse(t);
     }
+};
+
+struct remove_hanging_transforms_static_visitor : osg::NodeVisitor
+{
+    remove_hanging_transforms_static_visitor()
+        : osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN)
+    {}
+
+    void apply(osg::Node& node) override
+    {
+        traverse(node);
+    }
+
+    void apply(osg::Transform& t) override
+    {
+        if(t.getNumChildren() == 0)
+        {
+            nodes_to_remove_.insert(&t);
+        } else
+            traverse(t);
+    }
+
+    void remove_hanging_transforms()
+    {
+        for(auto& t: nodes_to_remove_)
+        {
+            assert(t->getNumParents() == 1);
+            t->getParent(0)->removeChild(t.get());
+        }
+        nodes_to_remove_.clear();
+    }
+
+private:
+    std::set<osg::ref_ptr<osg::Node>> nodes_to_remove_;
 };
 
 string material_name_for_chunk(string name, material_info const& data)
@@ -210,7 +245,7 @@ public:
 
             // convert all textures to some format
             aurora::convert_textures_visitor texture_visitor("dds");
-            const_cast<osg::Node&>(node).accept(texture_visitor);
+            osg_root.accept(texture_visitor);
             texture_visitor.write(osgDB::getFilePath(file_name));
 
             // apply transforms from ancestor nodes to geometry
@@ -218,10 +253,14 @@ public:
             make_transforms_static_visitor make_tranforms_static;
             osg_root.accept(make_tranforms_static);
 
+            // remove leaf Transform nodes because otherwise the optimizer will not be able to flatten all transforms properly
+            remove_hanging_transforms_static_visitor remove_hanging_tv;
+            osg_root.accept(remove_hanging_tv);
+            remove_hanging_tv.remove_hanging_transforms();
+
             // run the optimizer
             osgUtil::Optimizer optimizer;
             optimizer.optimize(&osg_root, osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS);
-
 
             aurora::geometry_visitor geom_visitor(mat_loader);
 
@@ -291,8 +330,7 @@ public:
 
             // ======================= DEBUG OUTPUT ============================
             //write_debug_obj_file(geom_visitor, file_name);
-            //osgDB::writeNodeFile(osg_root, fs::path(file_name).replace_extension("osg").string());
-            //osgDB::writeNodeFile(osg_root, fs::path(file_name).replace_extension("fbx").string());
+            //debug_utils::write_node(osg_root, fs::path(file_name).replace_extension("after.stripped.osg").string(), true);
             // ==================================================================
         }
         catch(std::exception const& e)
