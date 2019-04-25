@@ -53,9 +53,12 @@
 
 using namespace aurora;
 
-class MakeTransformsStaticVisitor: public osg::NodeVisitor
+struct make_transforms_static_visitor: osg::NodeVisitor
 {
-    using osg::NodeVisitor::NodeVisitor;
+    make_transforms_static_visitor()
+        : osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN)
+    {}
+
 
     void apply(osg::Node& node) override
     {
@@ -205,14 +208,14 @@ public:
             fix_materials_visitor fix_mats_vis(mat_loader, fs::path(materials_file).parent_path().string());
             osg_root.accept(fix_mats_vis);
 
-            // convert all textures to bmp
-            aurora::convert_textures_visitor texture_visitor;
+            // convert all textures to some format
+            aurora::convert_textures_visitor texture_visitor("dds");
             const_cast<osg::Node&>(node).accept(texture_visitor);
             texture_visitor.write(osgDB::getFilePath(file_name));
 
             // apply transforms from ancestor nodes to geometry
             // optimizer will only do this for transform nodes whose data variance is STATIC so we set it here 
-            MakeTransformsStaticVisitor make_tranforms_static(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN);
+            make_transforms_static_visitor make_tranforms_static;
             osg_root.accept(make_tranforms_static);
 
             // run the optimizer

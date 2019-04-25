@@ -8,8 +8,9 @@ namespace aurora
 
 struct convert_textures_visitor: osg::NodeVisitor
 {
-    convert_textures_visitor() :
-        osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN)
+    convert_textures_visitor(string convert_to) 
+        : osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN)
+        , extension_(convert_to)
     {}
 
     virtual void apply(osg::Node& node) override;
@@ -18,6 +19,7 @@ struct convert_textures_visitor: osg::NodeVisitor
 private:
     void apply(osg::StateSet& stateset);
 
+    string extension_;
     typedef std::set< osg::ref_ptr<osg::Texture> > TextureSet;
     TextureSet                          _textureSet;
 };
