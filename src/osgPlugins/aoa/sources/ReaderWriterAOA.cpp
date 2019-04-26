@@ -128,9 +128,9 @@ public:
 
         try 
         {
-            osg::ref_ptr<osg::MatrixTransform> transform = new osg::MatrixTransform(osg::Matrix(-1, 0, 0, 0, 
+            osg::ref_ptr<osg::MatrixTransform> transform = new osg::MatrixTransform(osg::Matrix( 1, 0, 0, 0, 
                                                                                                  0, 0, 1, 0,
-                                                                                                 0, 1, 0, 0,  
+                                                                                                 0,-1, 0, 0,  
                                                                                                  0, 0, 0, 1));
             transform->addChild(const_cast<osg::Node*>(&node));
 
