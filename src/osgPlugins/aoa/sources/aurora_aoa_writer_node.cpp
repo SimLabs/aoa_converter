@@ -159,6 +159,8 @@ aoa_writer::node_ptr aoa_writer::node::set_spot_lights(unsigned offset, unsigned
     if(!pimpl_->node_descr.lightpoint2)
         pimpl_->node_descr.lightpoint2 = boost::in_place();
 
+    add_flags(aoa_writer::DRAW_LIGHTPOINTS);
+
     pimpl_->node_descr.lightpoint2->spot_offset_size = refl::offset_size{ offset, size };
     return shared_from_this();
 }
