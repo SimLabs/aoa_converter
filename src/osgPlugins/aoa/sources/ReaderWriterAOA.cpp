@@ -3,53 +3,23 @@
     #pragma warning( disable : 4786 )
 #endif
 
-
-
-#include <stdlib.h>
-#include <string>
-
 #include <osg/Notify>
-#include <osg/Node>
+#include <osg/NodeVisitor>
 #include <osg/MatrixTransform>
-#include <osg/Geode>
-#include <osg/Vec3f>
-
-#include <osg/Geometry>
-#include <osg/StateSet>
-#include <osg/Material>
-#include <osg/Texture2D>
-#include <osg/TexGen>
-#include <osg/TexMat>
 
 #include <osgDB/Registry>
-#include <osgDB/ReadFile>
 #include <osgDB/WriteFile>
 #include <osgDB/FileUtils>
 #include <osgDB/FileNameUtils>
 
-//#include <osgUtil/TriStripVisitor>
-#include <osgUtil/SmoothingVisitor>
-#include <osgUtil/Tessellator>
 #include <osgUtil/Optimizer>
 
-//#include "common_includes.h"
-//#include "writer_visitor.h"
-//#include "atlas_building/atlas_builder.h"
-#include <map>
-#include <set>
-
-//#include "transformations.h"
-//#include "optimization/inactive_removing.h"
-//#include "optimization/propagate_state.h"
-//#include "optimization/optimization.h"
-//#include "temp/node_types.h"
-//#include "post_optimization/markings.h"
-//#include "optimization/preprocessing.h"
-
-#include "geometry_visitor.h"
+#include "write_aoa_visitor.h"
 #include "aurora_aoa_writer.h"
 #include "convert_textures_visitor.h"
 #include "fix_materials_visitor.h"
+#include "add_lights_visitor.h"
+#include "material_loader.h"
 #include "debug_utils.h"
 
 using namespace aurora;
@@ -73,9 +43,9 @@ struct make_transforms_static_visitor: osg::NodeVisitor
     }
 };
 
-struct remove_hanging_transforms_static_visitor : osg::NodeVisitor
+struct remove_hanging_transforms_visitor : osg::NodeVisitor
 {
-    remove_hanging_transforms_static_visitor()
+    remove_hanging_transforms_visitor()
         : osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN)
     {}
 
@@ -107,18 +77,6 @@ private:
     std::set<osg::ref_ptr<osg::Node>> nodes_to_remove_;
 };
 
-string material_name_for_chunk(string name, material_info const& data)
-{
-    if(!data.explicit_material.empty())
-    {
-        return data.explicit_material;
-    } 
-    else 
-    {
-        return name + "_mtl";
-    }
-}
-
 class ReaderWriterAOA : public osgDB::ReaderWriter
 {
 public:
@@ -139,35 +97,6 @@ public:
         //supportsOption("BUMP=<unit>", "Set texture unit for bumpmap texture");
         //supportsOption("DISPLACEMENT=<unit>", "Set texture unit for displacement texture");
         //supportsOption("REFLECTION=<unit>", "Set texture unit for reflection texture");
-    }
-
-    void write_debug_obj_file(aurora::geometry_visitor& geom_visitor, string file_name) const
-    {
-        std::ofstream obj_file(fs::path(file_name).replace_extension("obj").string());
-
-        for(auto const& v : geom_visitor.get_verticies())
-        {
-            obj_file << "v " << v.pos.x << " " << v.pos.y << " " << v.pos.z << std::endl;
-        }
-
-        for(auto const& v : geom_visitor.get_verticies())
-        {
-            obj_file << "vn " << v.norm.x << " " << v.norm.y << " " << v.norm.z << std::endl;
-        }
-
-
-        for(auto const& face : geom_visitor.get_faces())
-        {
-            unsigned v[3] = { face.v[0] + 1, face.v[1] + 1, face.v[2] + 1 };
-            obj_file << "f ";
-            for(unsigned i = 0; i < 3; ++i)
-            {
-                string foo = std::to_string(v[i]);
-                foo = foo + "//" + foo + " ";
-                obj_file << foo;
-            }
-            obj_file << std::endl;
-        }
     }
 
     const char* className() const override { return "Aurora engine AOA Writer"; }
@@ -194,7 +123,6 @@ public:
 
     WriteResult writeNode(const osg::Node& node, const std::string& file_name, const Options* options = nullptr) const override
     {
-//        DebugBreak();
         if (!acceptsExtension(osgDB::getFileExtension(file_name)))
             return WriteResult(WriteResult::FILE_NOT_HANDLED);
 
@@ -254,7 +182,7 @@ public:
             osg_root.accept(make_tranforms_static);
 
             // remove leaf Transform nodes because otherwise the optimizer will not be able to flatten all transforms properly
-            remove_hanging_transforms_static_visitor remove_hanging_tv;
+            remove_hanging_transforms_visitor remove_hanging_tv;
             osg_root.accept(remove_hanging_tv);
             remove_hanging_tv.remove_hanging_transforms();
 
@@ -262,74 +190,21 @@ public:
             osgUtil::Optimizer optimizer;
             optimizer.optimize(&osg_root, osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS);
 
-            aurora::geometry_visitor geom_visitor(mat_loader);
+            // add light sources based on geometry
+            add_lights_visitor add_lights_v;
+            osg_root.accept(add_lights_v);
+            add_lights_v.add_lights();
 
-            osg_root.accept(geom_visitor);
-
-            OSG_INFO << "EXTRACTED " << geom_visitor.get_chunks().size() << " CHUNKS" << std::endl;
-            OSG_INFO << "EXTRACTED " << geom_visitor.get_faces().size() << " FACES" << std::endl;
-            OSG_INFO << "EXTRACTED " << geom_visitor.get_verticies().size() << " VIRTICES" << std::endl;
             OSG_INFO << "Writing node to AOA file " << file_name << std::endl;
 
-            aurora::aoa_writer file_writer(fs::path(file_name).replace_extension("aod").string());
-            vector<aod::omni_light> omni_lights;
-            vector<aod::spot_light> spot_lights;
+            aurora::aoa_writer file_writer(file_name);
+            aurora::write_aoa_visitor write_aoa_v(mat_loader, file_writer);
+            osg_root.accept(write_aoa_v);
+            write_aoa_v.write_aoa();
 
-            aod::omni_light light;
-            light.position[0] = 0;
-            light.position[1] = -10;
-            light.position[2] = 13.;
-
-            light.power = 1000.;
-            light.color = geom::colorb(255, 0, 0);
-            light.r_min = 255;
-
-            omni_lights.push_back(light);
-
-
-            aod::spot_light spot;
-            spot.position[0] = 0;
-            spot.position[1] = -30;
-            spot.position[2] = 13.;
-            spot.power = 1000000;
-            spot.color = geom::color_blue();
-            spot.r_min = 1;
-            spot.dir_x = 0.;
-            spot.dir_y = 1.;
-            spot.dir_z = 0.;
-            spot.mask = 0x7;
-            spot.half_fov = geom::grad2rad(45.);
-            spot.angular_power = 1.;
-
-            spot_lights.push_back(spot);
-
-            file_writer.set_omni_lights_buffer_data(omni_lights);
-            file_writer.set_spot_lights_buffer_data(spot_lights);
-            file_writer.set_index_buffer_data(geom_visitor.get_faces());
-            file_writer.set_vertex_buffer_data(geom_visitor.get_verticies());
-
-            aoa_writer::node_ptr root = file_writer.create_root_node(fs::path(file_name).stem().string());
-
-            if(omni_lights.size())
-                root->set_omni_lights(0, omni_lights.size());
-            if(spot_lights.size())
-                root->set_spot_lights(0, spot_lights.size());
-
-            for(auto const& chunk : geom_visitor.get_chunks())
-            {
-                file_writer.add_material(material_name_for_chunk(chunk.name, chunk.material), chunk.material);
-                root->create_child(chunk.name)
-                    ->add_mesh(chunk.aabb, chunk.faces_range.lo() * 3,
-                               chunk.faces_range.hi() - chunk.faces_range.lo(),
-                               chunk.vertex_range.lo(),
-                               chunk.vertex_range.hi() - chunk.vertex_range.lo(),
-                               material_name_for_chunk(chunk.name, chunk.material));
-            }
-
-            file_writer.save_data();
 
             // ======================= DEBUG OUTPUT ============================
-            //write_debug_obj_file(geom_visitor, file_name);
+            //write_aoa_v.write_debug_obj_file(fs::path(file_name).replace_extension("obj").string());
             //debug_utils::write_node(osg_root, fs::path(file_name).replace_extension("after.stripped.osg").string(), true);
             // ==================================================================
         }
@@ -361,21 +236,6 @@ public:
     {
         return WriteResult(WriteResult::FILE_NOT_HANDLED);
     }
-    
-
-private:
-    //optional<string> config_path(Options const *options = nullptr) const
-    //{
-    //    if (!options)
-    //        return none;
-
-    //    if (options->getPluginStringData("scgConfig") != "")
-    //    {
-    //        return options->getPluginStringData("scgConfig");
-    //    }
-
-    //    return none;
-    //}
 };
 
 // register with Registry to instantiate the above reader/writer.

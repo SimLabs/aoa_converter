@@ -78,7 +78,7 @@ static_assert(sizeof(spot_light::raw_data) == sizeof(spot_light), "sizes differ"
 
 } // aod
 
-struct geometry_visitor;
+struct write_aoa_visitor;
 
 struct aoa_writer
 {
@@ -101,7 +101,7 @@ struct aoa_writer
     void set_omni_lights_buffer_data(vector<aod::omni_light> const& data);
     void set_spot_lights_buffer_data(vector<aod::spot_light> const& data);
 
-    node_ptr create_root_node(string name);
+    node_ptr get_root_node();
     aoa_writer& add_material(string name, material_info const& mat);
     void save_data();
 

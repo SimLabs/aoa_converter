@@ -1,23 +1,40 @@
-#include "geometry_visitor.h"
-#include "geometry_visitor.h"
-//#include "utils.h"
+#include "write_aoa_visitor.h"
+
 #include <osg/Texture2D>
 #include <osg/StateSet>
 #include <osg/Material>
 
+#include "material_loader.h"
+#include "aurora_aoa_writer.h"
+
 namespace aurora
 {
 
-geometry_visitor::geometry_visitor(material_loader& l)
+namespace
+{
+string material_name_for_chunk(string name, material_info const& data)
+{
+    if(!data.explicit_material.empty())
+    {
+        return data.explicit_material;
+    }
+    else
+    {
+        return name + "_mtl";
+    }
+}
+}
+
+write_aoa_visitor::write_aoa_visitor(material_loader& l, aoa_writer& w)
     : osg::NodeVisitor(TRAVERSE_ALL_CHILDREN)
     , material_loader_(l)
+    , aoa_writer_(w)
     , current_geode_(nullptr)
-    , finalized_    (false)
     //, material_manager_(material_manager)
 {
 }
 
-void geometry_visitor::apply(osg::Geode &geode)
+void write_aoa_visitor::apply(osg::Geode &geode)
 {
     if (geode2chunks_.find(&geode) != geode2chunks_.end())
         return;
@@ -25,7 +42,7 @@ void geometry_visitor::apply(osg::Geode &geode)
     traverse(geode);
 }
 
-void geometry_visitor::apply(osg::Geometry &geometry)
+void write_aoa_visitor::apply(osg::Geometry &geometry)
 {
     static unsigned count = 0;
     chunk_info_opt_material chunk;
@@ -53,43 +70,32 @@ void geometry_visitor::apply(osg::Geometry &geometry)
     chunks_.push_back(chunk);
 }
 
-vector<size_t> const & geometry_visitor::get_chunks(osg::Geode const &geode) const
+vector<size_t> const & write_aoa_visitor::get_chunks(osg::Geode const &geode) const
 {
     return geode2chunks_.at(&geode);
 }
 
-chunk_info_opt_material const & geometry_visitor::get_chunk(size_t index) const
+chunk_info_opt_material const & write_aoa_visitor::get_chunk(size_t index) const
 {
     return chunks_[index];
 }
 
-vector<chunk_info_opt_material> const & geometry_visitor::get_chunks() const
+vector<chunk_info_opt_material> const & write_aoa_visitor::get_chunks() const
 {
     return chunks_;
 }
 
-vector<vertex_info> const & geometry_visitor::get_verticies() const
+vector<vertex_info> const & write_aoa_visitor::get_verticies() const
 {
-    finalize();
     return verticies_;
 }
 
-vector<face> const & geometry_visitor::get_faces() const
+vector<face> const & write_aoa_visitor::get_faces() const
 {
-    finalize();
     return faces_;
 }
 
-void geometry_visitor::finalize() const
-{
-    if (!finalized_)
-    {
-        //count_tangents_lengyel(verticies_, faces_);
-        finalized_ = true;
-    }
-}
-
-geom::range_2ui geometry_visitor::collect_verticies(osg::Geometry const &geometry)
+geom::range_2ui write_aoa_visitor::collect_verticies(osg::Geometry const &geometry)
 {
     osg::Vec3Array const *vertex_array = dynamic_cast<osg::Vec3Array const*>(geometry.getVertexArray());
     osg::Vec2Array const *uv_array     = dynamic_cast<osg::Vec2Array const*>(geometry.getTexCoordArray(0));
@@ -118,7 +124,7 @@ geom::range_2ui geometry_visitor::collect_verticies(osg::Geometry const &geometr
     return {unsigned(vertex_start), unsigned(vertex_start + vertex_array->size())};
 }
 
-geom::range_2ui geometry_visitor::collect_faces(geom::range_2ui vertex_range, osg::Geometry const &geometry)
+geom::range_2ui write_aoa_visitor::collect_faces(geom::range_2ui vertex_range, osg::Geometry const &geometry)
 {
     geom::range_2ui faces_range = {(uint32_t)faces_.size(), (uint32_t)faces_.size()};
     for (unsigned i = 0; i < geometry.getNumPrimitiveSets(); ++i)
@@ -129,7 +135,7 @@ geom::range_2ui geometry_visitor::collect_faces(geom::range_2ui vertex_range, os
     return faces_range;
 }
 
-geom::range_2ui geometry_visitor::collect_faces(geom::range_2ui vertex_range, osg::PrimitiveSet const &primitive_set)
+geom::range_2ui write_aoa_visitor::collect_faces(geom::range_2ui vertex_range, osg::PrimitiveSet const &primitive_set)
 {
     geom::range_2ui faces_range = {(uint32_t)faces_.size(), (uint32_t)faces_.size()};
     if (primitive_set.getMode() != osg::PrimitiveSet::TRIANGLES)
@@ -152,7 +158,7 @@ geom::range_2ui geometry_visitor::collect_faces(geom::range_2ui vertex_range, os
     return faces_range;
 }
 
-void geometry_visitor::extract_texture_info(osg::Drawable& node, chunk_info_opt_material& chunk)
+void write_aoa_visitor::extract_texture_info(osg::Drawable& node, chunk_info_opt_material& chunk)
 {
     osg::Drawable* drawable = &node;
     if(drawable && drawable->getStateSet())
@@ -195,7 +201,7 @@ void geometry_visitor::extract_texture_info(osg::Drawable& node, chunk_info_opt_
     //traverse(node);
 }
 
-void geometry_visitor::fill_aabb(chunk_info_opt_material &chunk) const
+void write_aoa_visitor::fill_aabb(chunk_info_opt_material &chunk) const
 {
     float min_x, min_y, min_z;
     min_x = min_y = min_z = std::numeric_limits<float>::max();
@@ -217,6 +223,96 @@ void geometry_visitor::fill_aabb(chunk_info_opt_material &chunk) const
     }
 
     chunk.aabb = geom::rectangle_3f(geom::point_3f(min_x, min_y, min_z), geom::point_3f(max_x, max_y, max_z));
+}
+
+void write_aoa_visitor::write_debug_obj_file(string file_name) const
+{
+    std::ofstream obj_file(file_name);
+
+    for(auto const& v : get_verticies())
+    {
+        obj_file << "v " << v.pos.x << " " << v.pos.y << " " << v.pos.z << std::endl;
+    }
+
+    for(auto const& v : get_verticies())
+    {
+        obj_file << "vn " << v.norm.x << " " << v.norm.y << " " << v.norm.z << std::endl;
+    }
+
+    for(auto const& face : get_faces())
+    {
+        unsigned v[3] = { face.v[0] + 1, face.v[1] + 1, face.v[2] + 1 };
+        obj_file << "f ";
+        for(unsigned i = 0; i < 3; ++i)
+        {
+            string foo = std::to_string(v[i]);
+            foo = foo + "//" + foo + " ";
+            obj_file << foo;
+        }
+        obj_file << std::endl;
+    }
+}
+
+void write_aoa_visitor::write_aoa()
+{
+    OSG_INFO << "AOA plugin: EXTRACTED " << get_chunks().size()    << " CHUNKS"   << std::endl;
+    OSG_INFO << "AOA plugin: EXTRACTED " << get_faces().size()     << " FACES"    << std::endl;
+    OSG_INFO << "AOA plugin: EXTRACTED " << get_verticies().size() << " VIRTICES" << std::endl;
+
+    vector<aod::omni_light> omni_lights;
+    vector<aod::spot_light> spot_lights;
+
+    aod::omni_light light;
+    light.position[0] = 0;
+    light.position[1] = -10;
+    light.position[2] = 13.;
+
+    light.power = 1000.;
+    light.color = geom::colorb(255, 0, 0);
+    light.r_min = 255;
+
+    omni_lights.push_back(light);
+
+    aod::spot_light spot;
+    spot.position[0] = 0;
+    spot.position[1] = -30;
+    spot.position[2] = 13.;
+    spot.power = 1000000;
+    spot.color = geom::color_blue();
+    spot.r_min = 1;
+    spot.dir_x = 0.;
+    spot.dir_y = 1.;
+    spot.dir_z = 0.;
+    spot.mask = 0x7;
+    spot.half_fov = geom::grad2rad(45.);
+    spot.angular_power = 1.;
+
+    spot_lights.push_back(spot);
+
+    aoa_writer_.set_omni_lights_buffer_data(omni_lights);
+    aoa_writer_.set_spot_lights_buffer_data(spot_lights);
+    aoa_writer_.set_index_buffer_data(get_faces());
+    aoa_writer_.set_vertex_buffer_data(get_verticies());
+
+    aoa_writer::node_ptr root = aoa_writer_.get_root_node();
+
+    if(omni_lights.size())
+        root->set_omni_lights(0, omni_lights.size());
+    if(spot_lights.size())
+        root->set_spot_lights(0, spot_lights.size());
+
+    for(auto const& chunk : get_chunks())
+    {
+        aoa_writer_.add_material(material_name_for_chunk(chunk.name, chunk.material), chunk.material);
+        root->create_child(chunk.name)
+            ->add_mesh(chunk.aabb, chunk.faces_range.lo() * 3,
+                       chunk.faces_range.hi() - chunk.faces_range.lo(),
+                       chunk.vertex_range.lo(),
+                       chunk.vertex_range.hi() - chunk.vertex_range.lo(),
+                       material_name_for_chunk(chunk.name, chunk.material));
+    }
+
+    aoa_writer_.save_data();
 }
 
 }

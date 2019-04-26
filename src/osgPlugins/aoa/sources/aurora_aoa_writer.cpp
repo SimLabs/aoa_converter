@@ -1,5 +1,5 @@
 #include "aurora_aoa_writer.h"
-#include "geometry_visitor.h"
+#include "write_aoa_visitor.h"
 #include "aurora_format.h"
 #include "aurora_write_processor.h"
 
@@ -62,8 +62,9 @@ struct collision_buffer
 struct aoa_writer::impl
 {
     impl(string const& name)
-        : file_(name, std::ios_base::binary | std::ios_base::out)
-        , filename_(name)
+        : filename_(name)
+        , buffer_file_(fs::path(name).filename().replace_extension("aod").string())
+        , file_(fs::path(name).replace_extension("aod").string(), std::ios_base::binary | std::ios_base::out)
     {
         unsigned zeros[4] = {};
         write(&c_GP_BaseFileMarker, sizeof(unsigned));
@@ -76,9 +77,10 @@ struct aoa_writer::impl
         file_.write(reinterpret_cast<const char*>(data), size);
     }
 
-    ofstream file_;
     string   filename_;
-    vector<node_ptr> roots_;
+    string   buffer_file_;
+    ofstream file_;
+    node_ptr root_;
     vector<node_ptr> nodes_;
     refl::aurora_format aoa_descr_;
 
@@ -105,7 +107,7 @@ void aoa_writer::save_data()
     // create buffer file description
 
     refl::data_buffer buffer_descr;
-    buffer_descr.data_buffer_file = fs::path(pimpl_->filename_).filename().string();
+    buffer_descr.data_buffer_file = pimpl_->buffer_file_;
 
     buffer_descr.index_file_offset_size = { AOD_HEADER_SIZE + collision_buffer_size + light_buffer_size, index_buffer_size };
     buffer_descr.vertex_file_offset_size = { AOD_HEADER_SIZE + collision_buffer_size + light_buffer_size + index_buffer_size, vertex_buffer_size };
@@ -143,10 +145,8 @@ void aoa_writer::save_data()
     write_processor proc;
 
 
-    for(auto& r: pimpl_->roots_)
-    {
-        pimpl_->aoa_descr_.nodes.push_back(*(refl::node*)r->get_underlying());
-    }
+    assert(pimpl_->root_);
+    pimpl_->aoa_descr_.nodes.push_back(*(refl::node*)pimpl_->root_->get_underlying());
 
     for(auto& n : pimpl_->nodes_)
     {
@@ -155,7 +155,7 @@ void aoa_writer::save_data()
 
     reflect(proc, pimpl_->aoa_descr_);
 
-    std::ofstream aoa_file(fs::path(pimpl_->filename_).replace_extension("aoa").string());
+    std::ofstream aoa_file(pimpl_->filename_);
     aoa_file << proc.result();
 
     // write data
@@ -194,11 +194,14 @@ void aoa_writer::set_spot_lights_buffer_data(vector<aod::spot_light> const & dat
     pimpl_->lights_buffer_.spot_lights = data;
 }
 
-aoa_writer::node_ptr aoa_writer::create_root_node(string name)
+aoa_writer::node_ptr aoa_writer::get_root_node()
 {
-    pimpl_->roots_.emplace_back(make_shared<node>(*this));
+    if(pimpl_->root_)
+        return pimpl_->root_;
 
-    return pimpl_->roots_.back()->set_name(name)
+    pimpl_->root_ = make_shared<node>(*this);
+
+    return pimpl_->root_->set_name(fs::path(pimpl_->filename_).stem().string())
         ->add_flags(aoa_writer::GLOBAL_NODE)
         ->add_flags(aoa_writer::TREAT_CHILDREN)
         ->add_geometry_stream(250., 
