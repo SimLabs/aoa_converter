@@ -3,6 +3,7 @@
 #include <osg/Texture2D>
 #include <osg/StateSet>
 #include <osg/Material>
+#include <osg/LightSource>
 
 #include "material_loader.h"
 #include "aurora_aoa_writer.h"
@@ -68,6 +69,44 @@ void write_aoa_visitor::apply(osg::Geometry &geometry)
 
     geode2chunks_[current_geode_].push_back(chunks_.size());
     chunks_.push_back(chunk);
+}
+
+void write_aoa_visitor::apply(osg::LightSource & light_source)
+{
+    auto osg_light = light_source.getLight();
+    if(osg_light->getDirection().length2() == 0.)
+    {
+        // omni light
+        aod::omni_light light;
+        light.position[0] = osg_light->getPosition()[0];
+        light.position[1] = osg_light->getPosition()[1];
+        light.position[2] = osg_light->getPosition()[2];
+
+        light.power = 10000.;
+        light.color = geom::colorb(osg_light->getDiffuse().r(), osg_light->getDiffuse().g(), osg_light->getDiffuse().b());
+        light.r_min = 255;
+
+        omni_lights_.push_back(light);
+    }
+    else
+    {
+        // spot light
+        aod::spot_light spot;
+        spot.position[0] = osg_light->getPosition()[0];
+        spot.position[1] = osg_light->getPosition()[1];
+        spot.position[2] = osg_light->getPosition()[2];
+        spot.power = 10000;
+        spot.color = geom::colorb(osg_light->getDiffuse().r(), osg_light->getDiffuse().g(), osg_light->getDiffuse().b());
+        spot.r_min = 1;
+        spot.dir_x = osg_light->getDirection()[0];
+        spot.dir_y = osg_light->getDirection()[1];
+        spot.dir_z = osg_light->getDirection()[2];
+        spot.mask = 0x7;
+        spot.half_fov = geom::grad2rad(45.);
+        spot.angular_power = 1.;
+
+        spot_lights_.push_back(spot);
+    }
 }
 
 vector<size_t> const & write_aoa_visitor::get_chunks(osg::Geode const &geode) const
@@ -259,47 +298,17 @@ void write_aoa_visitor::write_aoa()
     OSG_INFO << "AOA plugin: EXTRACTED " << get_faces().size()     << " FACES"    << std::endl;
     OSG_INFO << "AOA plugin: EXTRACTED " << get_verticies().size() << " VIRTICES" << std::endl;
 
-    vector<aod::omni_light> omni_lights;
-    vector<aod::spot_light> spot_lights;
-
-    aod::omni_light light;
-    light.position[0] = 0;
-    light.position[1] = -10;
-    light.position[2] = 13.;
-
-    light.power = 1000.;
-    light.color = geom::colorb(255, 0, 0);
-    light.r_min = 255;
-
-    omni_lights.push_back(light);
-
-    aod::spot_light spot;
-    spot.position[0] = 0;
-    spot.position[1] = -30;
-    spot.position[2] = 13.;
-    spot.power = 1000000;
-    spot.color = geom::color_blue();
-    spot.r_min = 1;
-    spot.dir_x = 0.;
-    spot.dir_y = 1.;
-    spot.dir_z = 0.;
-    spot.mask = 0x7;
-    spot.half_fov = geom::grad2rad(45.);
-    spot.angular_power = 1.;
-
-    spot_lights.push_back(spot);
-
-    aoa_writer_.set_omni_lights_buffer_data(omni_lights);
-    aoa_writer_.set_spot_lights_buffer_data(spot_lights);
+    aoa_writer_.set_omni_lights_buffer_data(omni_lights_);
+    aoa_writer_.set_spot_lights_buffer_data(spot_lights_);
     aoa_writer_.set_index_buffer_data(get_faces());
     aoa_writer_.set_vertex_buffer_data(get_verticies());
 
     aoa_writer::node_ptr root = aoa_writer_.get_root_node();
 
-    if(omni_lights.size())
-        root->set_omni_lights(0, omni_lights.size());
-    if(spot_lights.size())
-        root->set_spot_lights(0, spot_lights.size());
+    if(omni_lights_.size())
+        root->set_omni_lights(0, omni_lights_.size());
+    if(spot_lights_.size())
+        root->set_spot_lights(0, spot_lights_.size());
 
     for(auto const& chunk : get_chunks())
     {

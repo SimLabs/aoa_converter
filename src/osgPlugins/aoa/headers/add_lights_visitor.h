@@ -54,8 +54,6 @@ namespace aurora
             {
                 if(node.getNumDrawables() == 0)
                     return;
-                else if(node.getNumDrawables() == 1)
-                    nodes_to_replace_.emplace(&node, light_for_drawable(*node.getDrawable(0)));
                 else
                     nodes_to_replace_.emplace(&node, light_group_for_geode(node));
             }
@@ -68,6 +66,18 @@ namespace aurora
             for(unsigned i = 0; i < num_drawables; ++i)
             {
                 result->addChild(light_for_drawable(*node.getDrawable(i)));
+
+                // rotate by 180 degrees about z axis
+                auto light_source_2 = light_for_drawable(*node.getDrawable(i));
+                osg::Matrix mat;
+                mat.setRotate(osg::Quat(geom::pi, osg::Vec3(0, 0, 1)));
+                light_source_2->getLight()->setDirection(light_source_2->getLight()->getDirection()*mat);
+                result->addChild(light_source_2);
+
+                // add omni
+                auto light_source_3 = light_for_drawable(*node.getDrawable(i));
+                light_source_2->getLight()->setDirection(osg::Vec3());
+                result->addChild(light_source_3);
             }
             return result;
         }
@@ -77,7 +87,8 @@ namespace aurora
             auto box = get_rect_from_drawable(dynamic_cast<osg::Geometry&>(node));
             auto box_center = box.center();
             osg::ref_ptr<osg::Light> light = new osg::Light();
-            light->setAmbient(osg::Vec4(1, 1, 1, 1));
+            light->setDirection(osg::Vec3(1, 0, 0));
+            light->setDiffuse(osg::Vec4(255, 255, 255, 1));
             light->setPosition(osg::Vec4(box_center.x, box_center.y, box_center.z, 1.));
             osg::ref_ptr<osg::LightSource> light_node = new osg::LightSource;
             light_node->setLight(light);

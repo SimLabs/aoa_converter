@@ -5,12 +5,12 @@
 #include "osg/NodeVisitor"
 
 #include "vao.h"
+#include "aurora_aoa_writer.h"
 
 namespace aurora
 {
 
 struct material_loader;
-struct aoa_writer;
 
 struct write_aoa_visitor : osg::NodeVisitor
 {
@@ -18,6 +18,7 @@ struct write_aoa_visitor : osg::NodeVisitor
 
     void apply(osg::Geode    &geode)    override;
     void apply(osg::Geometry &geometry) override;
+    void apply(osg::LightSource& light_source) override;
 
     void write_aoa();
     void write_debug_obj_file(string file_name) const;
@@ -49,6 +50,9 @@ private:
     vector<vertex_info>             verticies_;
     vector<face>                    faces_;
     vector<chunk_info_opt_material> chunks_;
+
+    vector<aod::omni_light> omni_lights_;
+    vector<aod::spot_light> spot_lights_;
 };
 
 using write_aoa_visitor_ptr = shared_ptr<write_aoa_visitor>;
