@@ -76,7 +76,7 @@ namespace aurora
 
                 // add omni
                 auto light_source_3 = light_for_drawable(*node.getDrawable(i));
-                light_source_2->getLight()->setDirection(osg::Vec3());
+                light_source_3->getLight()->setDirection(osg::Vec3());
                 result->addChild(light_source_3);
             }
             return result;
