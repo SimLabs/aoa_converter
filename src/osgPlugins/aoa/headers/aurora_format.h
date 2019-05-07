@@ -56,6 +56,7 @@ DECLARE_AURORA_FIELD(CONTROL_OBJECT_PARAM_DATA)
 DECLARE_AURORA_FIELD(CONTROL_TREAT_CHILDS)
 DECLARE_AURORA_FIELD(CONTROL_DRAW_MESH)
 DECLARE_AURORA_FIELD(CONTROL_DRAW_LIGHTPOINT)
+DECLARE_AURORA_FIELD(CONTROL_COLLISION_VOLUME)
 
 DECLARE_AURORA_FIELD(LIGHTS_FILE_OFFSET_SIZE)
 DECLARE_AURORA_FIELD(LIGHTS_TYPE)
@@ -67,6 +68,10 @@ DECLARE_AURORA_FIELD(OMNI)
 DECLARE_AURORA_FIELD(SPOT)
 
 DECLARE_AURORA_FIELD(COLLISION_BUFFER_STREAM)
+DECLARE_AURORA_FIELD(CONTROL_CVMESH2)
+DECLARE_AURORA_FIELD(CVMESH_VERTEX_FILE_FORMAT_OFFSET_COUNT)
+DECLARE_AURORA_FIELD(CVMESH_INDEX_FILE_OFFSET_COUNT)
+DECLARE_AURORA_FIELD(NUM_COLLISION_VOLUME)
 
 struct aurora_vector_field_tag
 {
@@ -173,6 +178,19 @@ struct offset_size
     size_t size;
 
     REFL_INNER(offset_size)
+        REFL_ENTRY(offset)
+        REFL_ENTRY(size)
+    REFL_END()
+};
+
+struct format_offset_size
+{
+    size_t format;
+    size_t offset;
+    size_t size;
+
+    REFL_INNER(format_offset_size)
+        REFL_ENTRY(format)
         REFL_ENTRY(offset)
         REFL_ENTRY(size)
     REFL_END()
@@ -400,6 +418,26 @@ struct node
             REFL_END()
         };
 
+        struct control_collision_volume
+        {
+            struct cv_mesh
+            {
+                format_offset_size vertex_vao_offset_size;
+                offset_size        index_offset_size;
+
+                REFL_INNER(cv_mesh)
+                    REFL_ENTRY_NAMED(vertex_vao_offset_size, Field__CVMESH_VERTEX_FILE_FORMAT_OFFSET_COUNT)
+                    REFL_ENTRY_NAMED(index_offset_size, Field__CVMESH_INDEX_FILE_OFFSET_COUNT)
+                REFL_END()
+            };
+
+            vector<cv_mesh> meshes;
+
+            REFL_INNER(control_collision_volume)
+                REFL_ENTRY_NAMED_WITH_TAG(meshes, Field__CONTROL_CVMESH2, aurora_vector_field_tag(Field__NUM_COLLISION_VOLUME))
+            REFL_END()
+        };
+
         template<class T>
         unsigned count_field(optional<T> const& f) const
         {
@@ -411,13 +449,15 @@ struct node
             return count_field(object_param_controller) +
                    count_field(treat_children) +
                    count_field(draw_mesh) +
-                   count_field(draw_lightpoint);
+                   count_field(draw_lightpoint) +
+                   count_field(collision_volume);
         }
 
         optional<control_object_param_data> object_param_controller;
         optional<string>                    treat_children;
         optional<string>                    draw_mesh;
         optional<string>                    draw_lightpoint;
+        optional<control_collision_volume>  collision_volume;
 
         REFL_INNER(controllers_t)
             auto size = lobj.num_controllers();
@@ -426,6 +466,7 @@ struct node
             REFL_ENTRY_NAMED(treat_children, Field__CONTROL_TREAT_CHILDS)
             REFL_ENTRY_NAMED(draw_mesh, Field__CONTROL_DRAW_MESH)
             REFL_ENTRY_NAMED(draw_lightpoint, Field__CONTROL_DRAW_LIGHTPOINT)
+            REFL_ENTRY_NAMED(collision_volume, Field__CONTROL_COLLISION_VOLUME)
         REFL_END()
     };
 

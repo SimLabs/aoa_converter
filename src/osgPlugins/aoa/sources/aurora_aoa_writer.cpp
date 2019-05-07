@@ -8,6 +8,7 @@ namespace aurora
 
 using geometry_buffer_stream = refl::node::controllers_t::control_object_param_data::data_buffer::geometry_buffer_stream;
 using light_buffer_stream = refl::node::controllers_t::control_object_param_data::data_buffer::light_buffer_stream;
+using collision_buffer_stream = refl::node::controllers_t::control_object_param_data::data_buffer::collision_buffer_stream;
 
 struct buffer_chunk
 {
@@ -78,6 +79,43 @@ aoa_writer::node_ptr aoa_writer::node::add_flags(uint32_t flags)
 aoa_writer::node_ptr aoa_writer::node::set_draw_order(unsigned order)
 {
     pimpl_->node_descr.draw_order = order;
+    return shared_from_this();
+}
+
+aoa_writer::node_ptr aoa_writer::node::set_collision_stream_spec(pair<unsigned, unsigned> vertex_offset_size, pair<unsigned, unsigned> index_offset_size)
+{
+    if(!pimpl_->node_descr.controllers.object_param_controller)
+    {
+        pimpl_->node_descr.controllers.object_param_controller = boost::in_place();
+    }
+
+    collision_buffer_stream col_stream;
+    col_stream.index_offset_size.offset = index_offset_size.first;
+    col_stream.index_offset_size.size = index_offset_size.second;
+    col_stream.vertex_offset_size.offset = vertex_offset_size.first;
+    col_stream.vertex_offset_size.size = vertex_offset_size.second;
+
+    pimpl_->node_descr.controllers.object_param_controller->buffer.collision_stream = col_stream;
+
+    return shared_from_this();
+}
+
+aoa_writer::node_ptr aoa_writer::node::add_cvmesh_spec(unsigned vao, std::pair<unsigned, unsigned> vertex_offset_size, std::pair<unsigned, unsigned> index_offset_size)
+{
+    pimpl_->node_descr.controllers.collision_volume = boost::in_place();
+
+    auto& collsion_volume = pimpl_->node_descr.controllers.collision_volume.value();
+    std::remove_reference_t<decltype(collsion_volume.meshes)>::value_type mesh;
+
+    mesh.vertex_vao_offset_size.format = vao;
+    mesh.vertex_vao_offset_size.offset = vertex_offset_size.first;
+    mesh.vertex_vao_offset_size.size = vertex_offset_size.second;
+
+    mesh.index_offset_size.offset = index_offset_size.first;
+    mesh.index_offset_size.size = index_offset_size.second;
+
+    collsion_volume.meshes.emplace_back(mesh);
+
     return shared_from_this();
 }
 
@@ -355,6 +393,9 @@ struct aoa_writer::impl
 
     pair<unsigned, unsigned> process_mesh_chunks(vector<buffer_chunk>& nodes_buffer_chunks)
     {
+        if(nodes_buffer_chunks.empty())
+            return {0, 0};
+
         unsigned whole_index_buffer_size = 0;
         std::for_each(begin(nodes_buffer_chunks), end(nodes_buffer_chunks), 
             [&](auto const& c) { whole_index_buffer_size += index_offset(c.faces.size()); });
@@ -363,7 +404,7 @@ struct aoa_writer::impl
         std::sort(begin(nodes_buffer_chunks), end(nodes_buffer_chunks), buffer_chunk_cmp());
 
         refl::data_buffer& buffer_descr = aoa_descr_.buffer_data;
-        unsigned current_vao = 0;
+        unsigned current_vao = buffer_descr.vaos.size();
         unsigned current_stream = 0;
         unsigned mesh_vertex_offset = 0;
         unsigned geom_stream_vertex_offset = 0;
@@ -371,76 +412,128 @@ struct aoa_writer::impl
         unsigned index_buffer_size = 0;
         unsigned vertex_buffer_size = 0;
 
-        if(nodes_buffer_chunks.size() > 0)
         {
+            refl::data_buffer::vao_buffer vao_descr;
+            vao_descr.vertex_format_offset.offset = whole_index_buffer_size + vertex_buffer_size;
+            vao_descr.format.attributes = nodes_buffer_chunks.begin()->vertex_format;
+
+            buffer_descr.vaos.push_back(vao_descr);
+        }
+
+        for(int i = 0; i < nodes_buffer_chunks.size(); i++)
+        {
+            auto& chunk = nodes_buffer_chunks[i];
+            bool add_geom_stream = false;
+
+            if(chunk.vertex_format != buffer_descr.vaos.back().format.attributes)
             {
                 refl::data_buffer::vao_buffer vao_descr;
                 vao_descr.vertex_format_offset.offset = whole_index_buffer_size + vertex_buffer_size;
-                vao_descr.format.attributes = nodes_buffer_chunks.begin()->vertex_format;
+                vao_descr.format.attributes = chunk.vertex_format;
 
+                current_vao = buffer_descr.vaos.size();
                 buffer_descr.vaos.push_back(vao_descr);
+                add_geom_stream = true;
             }
-
-            for(int i = 0; i < nodes_buffer_chunks.size(); i++)
+            else if(i - 1 >= 0)
             {
-                auto& chunk = nodes_buffer_chunks[i];
-                bool add_geom_stream = false;
-
-                if(chunk.vertex_format != buffer_descr.vaos.back().format.attributes)
+                if(nodes_buffer_chunks[i - 1].lod != chunk.lod)
                 {
-                    refl::data_buffer::vao_buffer vao_descr;
-                    vao_descr.vertex_format_offset.offset = whole_index_buffer_size + vertex_buffer_size;
-                    vao_descr.format.attributes = chunk.vertex_format;
-
-                    current_vao = buffer_descr.vaos.size();
-                    buffer_descr.vaos.push_back(vao_descr);
                     add_geom_stream = true;
                 }
-                else if(i - 1 >= 0)
-                {
-                    if(nodes_buffer_chunks[i - 1].lod != chunk.lod)
-                    {
-                        add_geom_stream = true;
-                    }
-                }
+            }
 
-                if(add_geom_stream)
-                {
-                    current_stream++;
-                    self_.get_root_node()->add_geometry_stream(chunk.lod,
+            if(add_geom_stream)
+            {
+                current_stream++;
+                self_.get_root_node()->add_geometry_stream(chunk.lod,
                     { geom_stream_vertex_offset, vertex_buffer_size - geom_stream_vertex_offset },
                     { geom_stream_index_offset, index_buffer_size - geom_stream_index_offset });
 
-                    geom_stream_vertex_offset = vertex_buffer_size;
-                    geom_stream_index_offset = index_buffer_size;
-                    mesh_vertex_offset = 0;
-                }
-
-                auto node = chunk.node.lock();
-                node->add_mesh_spec(chunk.bbox,
-                                    index_buffer_size / sizeof(face) * 3, // offset
-                                    chunk.faces.size(),         // count
-                                    mesh_vertex_offset,         // base_vertex
-                                    chunk.num_vertices, chunk.material, chunk.shadow_material, { current_stream, current_vao });
-
-                mesh_vertex_offset += chunk.num_vertices;
-                index_buffer_size += index_offset(chunk.faces.size());
-                vertex_buffer_size += chunk.data.size();
+                geom_stream_vertex_offset = vertex_buffer_size;
+                geom_stream_index_offset = index_buffer_size;
+                mesh_vertex_offset = 0;
             }
 
-            // add last stream
-            self_.get_root_node()->add_geometry_stream(prev(nodes_buffer_chunks.end())->lod,
+            auto node = chunk.node.lock();
+            node->add_mesh_spec(chunk.bbox,
+                                index_buffer_size / sizeof(face) * 3, // offset
+                                chunk.faces.size(),         // count
+                                mesh_vertex_offset,         // base_vertex
+                                chunk.num_vertices, chunk.material, chunk.shadow_material, { current_stream, current_vao });
+
+            mesh_vertex_offset += chunk.num_vertices;
+            index_buffer_size += index_offset(chunk.faces.size());
+            vertex_buffer_size += chunk.data.size();
+        }
+
+        // add last stream
+        self_.get_root_node()->add_geometry_stream(prev(nodes_buffer_chunks.end())->lod,
             { geom_stream_vertex_offset, vertex_buffer_size - geom_stream_vertex_offset },
             { geom_stream_index_offset, index_buffer_size - geom_stream_index_offset });
-        }
 
         assert(index_buffer_size == whole_index_buffer_size);
         return {index_buffer_size, vertex_buffer_size};
     }
 
-    void process_collision_chunks(vector<buffer_chunk>& nodes_buffer_chunks)
+    pair<unsigned, unsigned> process_collision_chunks(vector<buffer_chunk>& nodes_buffer_chunks)
     {
-        std::sort(begin(nodes_buffer_chunks), end(nodes_buffer_chunks), buffer_chunk_cmp());
+        if(nodes_buffer_chunks.empty())
+            return {0, 0};
+        
+        // format, as I get it, must be the same because there is only one stream
+        // at least I've not seen more than one (SL)
+        for(int i = 1; i < nodes_buffer_chunks.size(); ++i)
+        {
+            assert(nodes_buffer_chunks[i-1].vertex_format == nodes_buffer_chunks[i].vertex_format);
+        }
+
+        refl::data_buffer& buffer_descr = aoa_descr_.buffer_data;
+        unsigned index_buffer_size = 0;
+        unsigned vertex_buffer_size = 0;
+        unsigned current_vao = buffer_descr.vaos.size();
+
+        // add vao spec for collision data
+        {
+            refl::data_buffer::vao_buffer vao_descr;
+            vao_descr.vertex_format_offset.offset = 0;
+            vao_descr.format.attributes = nodes_buffer_chunks.begin()->vertex_format;
+
+            buffer_descr.vaos.push_back(vao_descr);
+        }
+
+        for(int i = 0; i < nodes_buffer_chunks.size(); i++)
+        {
+            auto& chunk = nodes_buffer_chunks[i];
+            unsigned chunk_index_size = index_offset(chunk.faces.size());
+            unsigned chunk_vertex_size = chunk.data.size();
+
+            auto node = chunk.node.lock();
+
+            node->add_cvmesh_spec(current_vao, {vertex_buffer_size, chunk_vertex_size},
+                                               {index_buffer_size, chunk_index_size});
+
+            index_buffer_size += chunk_index_size;
+            vertex_buffer_size += chunk_vertex_size;
+        }
+
+        return { index_buffer_size, vertex_buffer_size };
+    }
+
+    void write_index_data(vector<buffer_chunk>const & chunks)
+    {
+        for(auto const& chunk : chunks)
+        {
+            write(chunk.faces.data(), index_offset(chunk.faces.size()));
+        }
+    }
+
+    void write_vertex_data(vector<buffer_chunk>const & chunks)
+    {
+        for(auto const& chunk : chunks)
+        {
+            write(chunk.data.data(), chunk.data.size());
+        }
     }
 
     aoa_writer& self_;
@@ -475,13 +568,13 @@ void aoa_writer::save_data()
 
     for(auto& n : pimpl_->nodes_)
     {
-        std::copy_if(begin(n->pimpl_->buffer_chunks), end(n->pimpl_->buffer_chunks), back_inserter(mesh_chunks),
+        std::copy_if(begin(n->pimpl_->buffer_chunks), end(n->pimpl_->buffer_chunks), back_inserter(collision_chunks),
             [](auto const& c) { return c.kind == buffer_chunk::kind_t::COLLISION_MESH; });
     }
 
-    pimpl_->process_collision_chunks(collision_chunks);
     auto [index_buffer_size, vertex_buffer_size] = pimpl_->process_mesh_chunks(mesh_chunks);
-    unsigned collision_buffer_size = pimpl_->collision_buffer_.size();
+    auto [col_index_buffer_size, col_vertex_buffer_size] = pimpl_->process_collision_chunks(collision_chunks);
+    unsigned collision_buffer_size = col_index_buffer_size + col_vertex_buffer_size;
     unsigned light_buffer_size = pimpl_->lights_buffer_.size();
 
     // create buffer file description
@@ -491,6 +584,11 @@ void aoa_writer::save_data()
 
     buffer_descr.index_file_offset_size = { AOD_HEADER_SIZE + collision_buffer_size + light_buffer_size, index_buffer_size };
     buffer_descr.vertex_file_offset_size = { AOD_HEADER_SIZE + collision_buffer_size + light_buffer_size + index_buffer_size, vertex_buffer_size };
+
+    get_root_node()
+        ->set_collision_stream_spec({ AOD_HEADER_SIZE + col_index_buffer_size, col_vertex_buffer_size }, { AOD_HEADER_SIZE, col_index_buffer_size })
+        ->add_omnilights_stream(AOD_HEADER_SIZE + collision_buffer_size, pimpl_->lights_buffer_.omni_size())
+        ->add_spotlights_stream(AOD_HEADER_SIZE + collision_buffer_size + pimpl_->lights_buffer_.omni_size(), pimpl_->lights_buffer_.spot_size());
 
     // write aoa file
     write_processor proc;
@@ -509,17 +607,11 @@ void aoa_writer::save_data()
     aoa_file << proc.result();
 
     // write data
-
+    pimpl_->write_index_data(collision_chunks);
+    pimpl_->write_vertex_data(collision_chunks);
     pimpl_->lights_buffer_.write(*pimpl_);
-    for(auto const& chunk: mesh_chunks)
-    {
-        pimpl_->write(chunk.faces.data(), index_offset(chunk.faces.size()));
-    }
-    for(auto const& chunk : mesh_chunks)
-    {
-        pimpl_->write(chunk.data.data(), chunk.data.size());
-    }
-
+    pimpl_->write_index_data(mesh_chunks);
+    pimpl_->write_vertex_data(mesh_chunks);
     // write sizes of section to the header
 
     pimpl_->file_.seekp(8);
@@ -549,9 +641,7 @@ aoa_writer::node_ptr aoa_writer::get_root_node()
 
     return pimpl_->root_->set_name(fs::path(pimpl_->filename_).stem().string())
         ->add_flags(aoa_writer::GLOBAL_NODE)
-        ->add_flags(aoa_writer::TREAT_CHILDREN)
-        ->add_omnilights_stream(AOD_HEADER_SIZE + pimpl_->collision_buffer_.size(),  pimpl_->lights_buffer_.omni_size())
-        ->add_spotlights_stream(AOD_HEADER_SIZE + pimpl_->collision_buffer_.size() + pimpl_->lights_buffer_.omni_size(), pimpl_->lights_buffer_.spot_size());
+        ->add_flags(aoa_writer::TREAT_CHILDREN);
 }
 
 aoa_writer & aoa_writer::add_material(string name, material_info const & mat)
