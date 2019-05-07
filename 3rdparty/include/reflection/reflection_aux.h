@@ -141,18 +141,28 @@ void process_as_type(proc_t& proc, entry_t& entry, entry_t& entry2, const char* 
     type_t type_value;
     uni_cast_assign(type_value, entry);
     proc(type_value, type_value, name, tag);
-    refl::uni_cast_assign(entry, type_value);
+    ::refl::uni_cast_assign(entry, type_value);
 }
 
 template<class type_t, class proc_t, class entry_t>
 void process_as_type(proc_t& proc, entry_t& entry, entry_t& entry2, const char* name)
 {
     (void)entry2;
-    Assert(&entry == &entry2);
     type_t type_value;
     uni_cast_assign(type_value, entry);
-    proc(type_value, type_value, name);
-    refl::uni_cast_assign(entry, type_value);
+    if(&entry == &entry2)
+    {
+        proc(type_value, type_value, name);
+        ::refl::uni_cast_assign(entry, type_value);
+    } 
+    else
+    {
+        type_t type_value2;
+        uni_cast_assign(type_value2, entry2);
+        proc(type_value, type_value2, name);
+        ::refl::uni_cast_assign(entry, type_value);
+        ::refl::uni_cast_assign(entry2, type_value2);
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////
