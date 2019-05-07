@@ -136,6 +136,8 @@ struct aoa_writer
         node_ptr set_spot_lights(unsigned offset, unsigned size);
 
     private:
+        node_ptr  set_collision_stream_spec(pair<unsigned, unsigned> vertex_offset_size, pair<unsigned, unsigned> index_offset_size);
+        node_ptr  add_cvmesh_spec(unsigned vao, std::pair<unsigned, unsigned> vertex_offset_size, std::pair<unsigned, unsigned> index_offset_size);
         node_ptr  add_mesh_spec(geom::rectangle_3f bbox, unsigned offset, unsigned count, unsigned base_vertex, unsigned num_vertices, string material, string shadow_material = "Shadow_Common", std::pair<unsigned, unsigned> vao_ref = {0, 0});
         node_ptr  add_collision_mesh_impl(const char* data, size_t size, size_t num_vertices, vector<face> const& faces, vector<vertex_attribute> format);
         node_ptr  add_mesh_impl(geom::rectangle_3f bbox, const char* data, size_t size, size_t num_vertices, vector<vertex_attribute> format, vector<face> const& faces, float lod, string material, string shadow_material);

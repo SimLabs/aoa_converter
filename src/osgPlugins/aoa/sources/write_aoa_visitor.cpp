@@ -333,14 +333,31 @@ void write_aoa_visitor::write_aoa()
                                           /*.divisor = */ 0
     });
 
+    vector<vertex_attribute> col_attrs_format{vertex_format.front()};
+
     for(auto const& chunk : get_chunks())
     {
         vector<vertex_info> vertices(get_verticies().begin() + chunk.vertex_range.lo(), get_verticies().begin() + chunk.vertex_range.hi());
         vector<face>        faces(get_faces().begin() + chunk.faces_range.lo(), get_faces().begin() + chunk.faces_range.hi());
+        vector<geom::point_3f> col_attrs;
+        vector<face>        col_faces = faces;
+
+        //std::for_each(begin(col_faces), end(col_faces),
+        //[inc = chunk.vertex_range.lo()] (auto &f)
+        //{
+        //    f.v[0] += inc;
+        //    f.v[1] += inc;
+        //    f.v[2] += inc;
+        //});
+
+        std::transform(begin(vertices), end(vertices), back_inserter(col_attrs), 
+            [](auto const& v){ return v.pos; });
 
         aoa_writer_.add_material(material_name_for_chunk(chunk.name, chunk.material), chunk.material);
         root->create_child(chunk.name)
             ->add_mesh(chunk.aabb, vertices, vertex_format, faces, 250.f, material_name_for_chunk(chunk.name, chunk.material));
+        root->create_child(chunk.name + "_col")
+            ->add_collision_mesh(col_attrs, col_faces, col_attrs_format);
     }
 
     aoa_writer_.save_data();

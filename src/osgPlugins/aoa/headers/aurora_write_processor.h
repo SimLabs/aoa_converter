@@ -25,6 +25,7 @@ struct is_flat_type
         value = (std::is_same_v<std::remove_reference_t<T>, aurora::refl::data_buffer::vao_buffer::format_offset> ||
                  std::is_same_v<std::remove_reference_t<T>, aurora::refl::data_buffer::vao_buffer::vertex_format::vertex_attribute> ||
                  std::is_same_v<std::remove_reference_t<T>, aurora::refl::offset_size> ||
+                 std::is_same_v<std::remove_reference_t<T>, aurora::refl::format_offset_size> ||
                  std::is_same_v<std::remove_reference_t<T>, aurora::refl::node::mesh_t::mesh_face::mesh_face_offset_count_base_mat> ||
                  std::is_same_v<std::remove_reference_t<T>, aurora::refl::node::mesh_t::mesh_bbox> ||
                  std::is_same_v<std::remove_reference_t<T>, aurora::refl::node::mesh_t::mesh_bsphere> ||
