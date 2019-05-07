@@ -1,5 +1,6 @@
 #pragma once
 #include "reflection/reflection.h"
+#include "cpp_utils/refl_operators.h"
 
 #define DECLARE_AURORA_FIELD(name) \
     constexpr char* Field__## name = "#" #name;
@@ -64,6 +65,8 @@ DECLARE_AURORA_FIELD(LIGHTS_STREAM_NUM_ELEM)
 DECLARE_AURORA_FIELD(LIGHTPOINT2)
 DECLARE_AURORA_FIELD(OMNI)
 DECLARE_AURORA_FIELD(SPOT)
+
+DECLARE_AURORA_FIELD(COLLISION_BUFFER_STREAM)
 
 struct aurora_vector_field_tag
 {
@@ -201,6 +204,7 @@ struct data_buffer
                 vertex_attrs::mode_t   mode;
                 unsigned divisor;
 
+
                 REFL_INNER(vertex_attribute)
                     REFL_ENTRY(id)
                     REFL_ENTRY(size)
@@ -208,6 +212,8 @@ struct data_buffer
                     REFL_AS_TYPE(mode, string)
                     REFL_ENTRY(divisor)
                 REFL_END()
+
+                ENABLE_REFL_CMP(vertex_attribute)
             };
 
             vector<vertex_attribute> attributes;
@@ -364,12 +370,25 @@ struct node
                     REFL_END()
                 };
 
+                struct collision_buffer_stream
+                {
+                    offset_size index_offset_size;
+                    offset_size vertex_offset_size;
+
+                    REFL_INNER(collision_buffer_stream)
+                        REFL_ENTRY_NAMED(index_offset_size, Field__INDEX_FILE_OFFSET_SIZE)
+                        REFL_ENTRY_NAMED(vertex_offset_size, Field__VERTEX_FILE_OFFSET_SIZE)
+                    REFL_END()
+                };
+
                 vector<geometry_buffer_stream> geometry_streams;
                 vector<light_buffer_stream>    light_streams;
+                optional<collision_buffer_stream> collision_stream;
 
                 REFL_INNER(data_buffer)
                     REFL_ENTRY_NAMED_WITH_TAG(geometry_streams, Field__GEOMETRY_BUFFER_STREAM, aurora_vector_field_tag(Field__GEOMETRY_STREAM_NUM_ELEM))
                     REFL_ENTRY_NAMED_WITH_TAG(light_streams, Field__LIGHT_BUFFER_STREAM, aurora_vector_field_tag(Field__LIGHTS_STREAM_NUM_ELEM))
+                    REFL_ENTRY_NAMED(collision_stream, Field__COLLISION_BUFFER_STREAM)
                 REFL_END()
             };
         

@@ -2,6 +2,7 @@
 #include "vao.h"
 #include "geometry/primitives/color.h"
 #include "geometry/half.h"
+#include "aurora_format.h"
 
 namespace aurora
 {
@@ -80,6 +81,10 @@ static_assert(sizeof(spot_light::raw_data) == sizeof(spot_light), "sizes differ"
 
 struct write_aoa_visitor;
 
+using aurora::refl::vertex_attrs::type_t;
+using aurora::refl::vertex_attrs::mode_t;
+using vertex_attribute = refl::data_buffer::vao_buffer::vertex_format::vertex_attribute;
+
 struct aoa_writer
 {
     enum node_flags
@@ -96,8 +101,6 @@ struct aoa_writer
     struct node;
     using node_ptr = std::shared_ptr<node>;
 
-    void set_index_buffer_data(vector<face> const& data);
-    void set_vertex_buffer_data(vector<vertex_info> const& data);
     void set_omni_lights_buffer_data(vector<aod::omni_light> const& data);
     void set_spot_lights_buffer_data(vector<aod::spot_light> const& data);
 
@@ -116,11 +119,19 @@ struct aoa_writer
         node_ptr add_flags(uint32_t flags);
         node_ptr set_draw_order(unsigned order);
 
-        node_ptr add_mesh(geom::rectangle_3f bbox, unsigned offset, unsigned count, unsigned base_vertex, unsigned num_vertices, string material, string shadow_material = "Shadow_Common", std::pair<unsigned, unsigned> vao_ref = {0, 0});
+
+        template<typename T>
+        node_ptr add_mesh(geom::rectangle_3f bbox, vector<T>const & attributes, vector<vertex_attribute> format, vector<face> const& faces, float lod, string material, string shadow_material = "Shadow_Common")
+        {
+            return add_mesh_impl(bbox, reinterpret_cast<const char*>(attributes.data()), attributes.size() * sizeof(T), attributes.size(), format, faces, lod, material, shadow_material);
+        }
+
         node_ptr set_omni_lights(unsigned offset, unsigned size);
         node_ptr set_spot_lights(unsigned offset, unsigned size);
 
     private:
+        node_ptr  add_mesh_spec(geom::rectangle_3f bbox, unsigned offset, unsigned count, unsigned base_vertex, unsigned num_vertices, string material, string shadow_material = "Shadow_Common", std::pair<unsigned, unsigned> vao_ref = {0, 0});
+        node_ptr  add_mesh_impl(geom::rectangle_3f bbox, const char* data, size_t size, size_t num_vertices, vector<vertex_attribute> format, vector<face> const& faces, float lod, string material, string shadow_material);
         node_ptr  add_geometry_stream(float lod, pair<unsigned, unsigned> vertex_offset_size, pair<unsigned, unsigned> index_offset_size);
         node_ptr  add_omnilights_stream(unsigned offset, unsigned size);
         node_ptr  add_spotlights_stream(unsigned offset, unsigned size);

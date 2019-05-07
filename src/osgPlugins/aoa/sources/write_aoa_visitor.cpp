@@ -300,8 +300,6 @@ void write_aoa_visitor::write_aoa()
 
     aoa_writer_.set_omni_lights_buffer_data(omni_lights_);
     aoa_writer_.set_spot_lights_buffer_data(spot_lights_);
-    aoa_writer_.set_index_buffer_data(get_faces());
-    aoa_writer_.set_vertex_buffer_data(get_verticies());
 
     aoa_writer::node_ptr root = aoa_writer_.get_root_node();
 
@@ -310,15 +308,39 @@ void write_aoa_visitor::write_aoa()
     if(spot_lights_.size())
         root->set_spot_lights(0, spot_lights_.size());
 
+    vector<vertex_attribute> vertex_format;
+    vertex_format.push_back(vertex_attribute
+    {   /*.id      = */ 0,
+                                          /*.size    = */ 3,
+                                          /*.type    = */ type_t::FLOAT,
+                                          /*.mode    = */ mode_t::ATTR_MODE_FLOAT,
+                                          /*.divisor = */ 0
+    });
+
+    vertex_format.push_back(vertex_attribute
+    {   /*.id      = */ 1,
+                                          /*.size    = */ 3,
+                                          /*.type    = */ type_t::FLOAT,
+                                          /*.mode    = */ mode_t::ATTR_MODE_FLOAT,
+                                          /*.divisor = */ 0
+    });
+
+    vertex_format.push_back(vertex_attribute
+    {   /*.id      = */ 4,
+                                          /*.size    = */ 2,
+                                          /*.type    = */ type_t::FLOAT,
+                                          /*.mode    = */ mode_t::ATTR_MODE_FLOAT,
+                                          /*.divisor = */ 0
+    });
+
     for(auto const& chunk : get_chunks())
     {
+        vector<vertex_info> vertices(get_verticies().begin() + chunk.vertex_range.lo(), get_verticies().begin() + chunk.vertex_range.hi());
+        vector<face>        faces(get_faces().begin() + chunk.faces_range.lo(), get_faces().begin() + chunk.faces_range.hi());
+
         aoa_writer_.add_material(material_name_for_chunk(chunk.name, chunk.material), chunk.material);
         root->create_child(chunk.name)
-            ->add_mesh(chunk.aabb, chunk.faces_range.lo() * 3,
-                       chunk.faces_range.hi() - chunk.faces_range.lo(),
-                       chunk.vertex_range.lo(),
-                       chunk.vertex_range.hi() - chunk.vertex_range.lo(),
-                       material_name_for_chunk(chunk.name, chunk.material));
+            ->add_mesh(chunk.aabb, vertices, vertex_format, faces, 250.f, material_name_for_chunk(chunk.name, chunk.material));
     }
 
     aoa_writer_.save_data();
