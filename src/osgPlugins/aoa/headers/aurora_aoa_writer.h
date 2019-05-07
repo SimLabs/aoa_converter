@@ -126,11 +126,18 @@ struct aoa_writer
             return add_mesh_impl(bbox, reinterpret_cast<const char*>(attributes.data()), attributes.size() * sizeof(T), attributes.size(), format, faces, lod, material, shadow_material);
         }
 
+        template<typename T>
+        node_ptr add_collision_mesh(vector<T>const & attributes, vector<face> const& faces, vector<vertex_attribute> format)
+        {
+            return add_collision_mesh_impl(reinterpret_cast<const char*>(attributes.data()), attributes.size() * sizeof(T), attributes.size(), faces, format);
+        }
+
         node_ptr set_omni_lights(unsigned offset, unsigned size);
         node_ptr set_spot_lights(unsigned offset, unsigned size);
 
     private:
         node_ptr  add_mesh_spec(geom::rectangle_3f bbox, unsigned offset, unsigned count, unsigned base_vertex, unsigned num_vertices, string material, string shadow_material = "Shadow_Common", std::pair<unsigned, unsigned> vao_ref = {0, 0});
+        node_ptr  add_collision_mesh_impl(const char* data, size_t size, size_t num_vertices, vector<face> const& faces, vector<vertex_attribute> format);
         node_ptr  add_mesh_impl(geom::rectangle_3f bbox, const char* data, size_t size, size_t num_vertices, vector<vertex_attribute> format, vector<face> const& faces, float lod, string material, string shadow_material);
         node_ptr  add_geometry_stream(float lod, pair<unsigned, unsigned> vertex_offset_size, pair<unsigned, unsigned> index_offset_size);
         node_ptr  add_omnilights_stream(unsigned offset, unsigned size);
