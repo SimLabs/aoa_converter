@@ -175,7 +175,7 @@ private:
       {
          uif x;
          x.f = f;
-         register int e = (x.i >> 23) & 0x000001ff;
+         int e = (x.i >> 23) & 0x000001ff;
          e = _eLut[e];
          if (e)
             _h = e + (((x.i & 0x007fffff) + 0x00001000) >> 13);
@@ -188,9 +188,9 @@ private:
    // exact float-to-half conversion routine
    static __forceinline unsigned short convert(int i)
    {
-      register int s =  (i >> 16) & 0x00008000;
-      register int e = ((i >> 23) & 0x000000ff) - (127 - 15);
-      register int m =   i        & 0x007fffff;
+      int s =  (i >> 16) & 0x00008000;
+      int e = ((i >> 23) & 0x000000ff) - (127 - 15);
+      int m =   i        & 0x007fffff;
 
       if (e <= 0)
       {

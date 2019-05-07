@@ -322,6 +322,8 @@ IF(WIN32 AND NOT ANDROID)
     ENDIF(OSG_DETERMINE_WIN_VERSION)
 
     IF(MSVC)
+        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++17")
+        ADD_DEFINITIONS(-D_HAS_AUTO_PTR_ETC=1)
         # This option is to enable the /MP switch for Visual Studio 2005 and above compilers
         OPTION(WIN32_USE_MP "Set to ON to build OpenSceneGraph with the /MP option (Visual Studio 2005 and above)." OFF)
         MARK_AS_ADVANCED(WIN32_USE_MP)
