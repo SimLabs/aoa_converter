@@ -23,6 +23,7 @@
 #include "add_lights_visitor.h"
 #include "material_loader.h"
 #include "debug_utils.h"
+#include "plugin_config.h"
 
 using namespace aurora;
 
@@ -169,6 +170,14 @@ public:
                 OSG_WARN << "AOA plugin: materials file is not specified\n";
     
             material_loader mat_loader(materials_file);
+
+            // initialize config file
+            string config_path;
+            arguments.read("--aoa-config", config_path);
+            if(config_path.empty())
+                config_path = "aoa.config.json";
+            auto config = get_config(config_path);
+            //////////////////////////////////////////////
 
             fix_materials_visitor fix_mats_vis(mat_loader, fs::path(materials_file).parent_path().string());
             osg_root.accept(fix_mats_vis);
