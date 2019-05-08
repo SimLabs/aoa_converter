@@ -15,6 +15,7 @@
 // STL-compatible private-heap based single-element allocator
 //
 
+#ifndef DISABLE_CUSTOM_ALLOCATOR
 template<typename T>
 struct private_heap_allocator
     //: type_size_base<T>
@@ -84,6 +85,10 @@ private:
         return heap_obj.get();
     }
 };
+#else
+template<class T>
+struct private_heap_allocator : std::allocator<T> {};
+#endif
 
 template<class T1, class T2>
 bool operator==(const private_heap_allocator<T1> &, const private_heap_allocator<T2> &)
