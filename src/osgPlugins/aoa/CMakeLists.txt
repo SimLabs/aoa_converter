@@ -1,5 +1,4 @@
 add_compile_options("/FIstdafx.h")
-add_definitions(-DCG_PRIMITIVES)
 
 INCLUDE_DIRECTORIES(./headers)
 
@@ -31,6 +30,7 @@ INCLUDE_DIRECTORIES (
 #     ${MODEL_STRUCTURE_INCLUDE_DIR}
      ${GEOMETRY_INCLUDE_DIR}
      ${COMMON_INCLUDE_DIR}
+     ${RAPIDJSON_INCLUDE_DIR}
 #     ${ALLOC_INCLUDE_DIR}
 #     ${CPP_UTILS_INCLUDE_DIR}
 #     ${BINARY_INCLUDE_DIR}
@@ -59,6 +59,8 @@ ${BOOST_LIBRARYDIR})
 SET(TARGET_EXTERNAL_LIBRARIES osgSim)
 
 ## define macros
+add_definitions(-DCG_PRIMITIVES)
+add_definitions(-DDISABLE_CUSTOM_ALLOCATOR)
 # SET (CG_PRIMITIVES true)
 # SET (WIN32_LEAN_AND_MEAN true)
 # SET (NOMINMAX true)

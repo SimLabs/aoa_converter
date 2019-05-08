@@ -3,6 +3,8 @@
     #pragma warning( disable : 4786 )
 #endif
 
+#include <boost/tokenizer.hpp>
+
 #include <osg/Notify>
 #include <osg/NodeVisitor>
 #include <osg/MatrixTransform>

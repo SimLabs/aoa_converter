@@ -4,6 +4,8 @@
 #include "common/boost.h"
 #include "boost/filesystem.hpp"
 
+namespace fs = boost::filesystem;
+
 #include "geometry/primitives/point.h"
 #include "geometry/primitives/rectangle.h"
 #include "geometry/primitives/range.h"
