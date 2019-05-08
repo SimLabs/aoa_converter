@@ -335,6 +335,13 @@ void write_aoa_visitor::write_aoa()
 
     vector<vertex_attribute> col_attrs_format{vertex_format.front()};
 
+    geom::rectangle_3f bbox;
+
+    for(auto const& chunk: get_chunks())
+    {
+        bbox |= chunk.aabb;
+    }
+
     for(auto const& chunk : get_chunks())
     {
         vector<vertex_info> vertices(get_verticies().begin() + chunk.vertex_range.lo(), get_verticies().begin() + chunk.vertex_range.hi());
@@ -346,6 +353,8 @@ void write_aoa_visitor::write_aoa()
             [](auto const& v){ return v.pos; });
 
         aoa_writer_.add_material(material_name_for_chunk(chunk.name, chunk.material), chunk.material);
+
+        root->set_cvbox_spec(bbox);
         root->create_child(chunk.name)
             ->add_mesh(chunk.aabb, vertices, vertex_format, faces, 250.f, material_name_for_chunk(chunk.name, chunk.material));
         root->create_child(chunk.name + "_col")

@@ -17,8 +17,15 @@ struct is_leaf_type
     };
 };
 
+template<class... T>
+struct is_flat_type;
+
+template<class... Args>
+struct is_flat_type<std::tuple<Args...>>: std::integral_constant<bool, true>
+{};
+
 template<class T>
-struct is_flat_type
+struct is_flat_type<T>
 {
     enum
     {

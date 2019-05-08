@@ -135,6 +135,8 @@ struct aoa_writer
         node_ptr set_omni_lights(unsigned offset, unsigned size);
         node_ptr set_spot_lights(unsigned offset, unsigned size);
 
+        node_ptr  set_cvbox_spec(geom::rectangle_3f const& box);
+        node_ptr  set_cvsphere_spec(geom::sphere_3f const& sphere);
     private:
         node_ptr  set_collision_stream_spec(pair<unsigned, unsigned> vertex_offset_size, pair<unsigned, unsigned> index_offset_size);
         node_ptr  add_cvmesh_spec(unsigned vao, std::pair<unsigned, unsigned> vertex_offset_size, std::pair<unsigned, unsigned> index_offset_size);

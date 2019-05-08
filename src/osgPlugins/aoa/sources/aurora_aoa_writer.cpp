@@ -82,6 +82,30 @@ aoa_writer::node_ptr aoa_writer::node::set_draw_order(unsigned order)
     return shared_from_this();
 }
 
+aoa_writer::node_ptr aoa_writer::node::set_cvbox_spec(geom::rectangle_3f const & box)
+{
+    if(!pimpl_->node_descr.controllers.object_param_controller)
+    {
+        pimpl_->node_descr.controllers.object_param_controller = boost::in_place();
+    }
+
+    refl::node::controllers_t::control_object_param_data::cv_box cvbox(box);
+    pimpl_->node_descr.controllers.object_param_controller->cvbox = cvbox;
+    return shared_from_this();
+}
+
+aoa_writer::node_ptr aoa_writer::node::set_cvsphere_spec(geom::sphere_3f const & sphere)
+{
+    if(!pimpl_->node_descr.controllers.object_param_controller)
+    {
+        pimpl_->node_descr.controllers.object_param_controller = boost::in_place();
+    }
+
+    refl::node::controllers_t::control_object_param_data::cv_sphere cvsphere(sphere);
+    pimpl_->node_descr.controllers.object_param_controller->cvsphere = cvsphere;
+    return shared_from_this();
+}
+
 aoa_writer::node_ptr aoa_writer::node::set_collision_stream_spec(pair<unsigned, unsigned> vertex_offset_size, pair<unsigned, unsigned> index_offset_size)
 {
     if(!pimpl_->node_descr.controllers.object_param_controller)

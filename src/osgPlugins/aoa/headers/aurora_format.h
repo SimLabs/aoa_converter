@@ -1,6 +1,7 @@
 #pragma once
 #include "reflection/reflection.h"
 #include "cpp_utils/refl_operators.h"
+#include "geometry/primitives/sphere.h"
 
 #define DECLARE_AURORA_FIELD(name) \
     constexpr char* Field__## name = "#" #name;
@@ -57,6 +58,14 @@ DECLARE_AURORA_FIELD(CONTROL_TREAT_CHILDS)
 DECLARE_AURORA_FIELD(CONTROL_DRAW_MESH)
 DECLARE_AURORA_FIELD(CONTROL_DRAW_LIGHTPOINT)
 DECLARE_AURORA_FIELD(CONTROL_COLLISION_VOLUME)
+
+DECLARE_AURORA_FIELD(CONTROL_CVSPHERE)
+DECLARE_AURORA_FIELD(CONTROL_CVSPHERE_POINT)
+DECLARE_AURORA_FIELD(CONTROL_CVSPHERE_RADIUS)
+
+DECLARE_AURORA_FIELD(CONTROL_CVBOX)
+DECLARE_AURORA_FIELD(CONTROL_CVBOX_MIN)
+DECLARE_AURORA_FIELD(CONTROL_CVBOX_MAX)
 
 DECLARE_AURORA_FIELD(LIGHTS_FILE_OFFSET_SIZE)
 DECLARE_AURORA_FIELD(LIGHTS_TYPE)
@@ -409,11 +418,49 @@ struct node
                     REFL_ENTRY_NAMED(collision_stream, Field__COLLISION_BUFFER_STREAM)
                 REFL_END()
             };
+
+            struct cv_sphere
+            {
+                cv_sphere(geom::sphere_3f const& s = {})
+                {
+                    center = {s.center.x, s.center.y, s.center.z};
+                    radius = s.radius;
+                }
+
+                std::tuple<float, float, float> center;
+                float radius;
+
+                REFL_INNER(cv_sphere)
+                    REFL_ENTRY_NAMED(center, Field__CONTROL_CVSPHERE_POINT)
+                    REFL_ENTRY_NAMED(radius, Field__CONTROL_CVSPHERE_RADIUS)
+                REFL_END()
+            };
+
+            struct cv_box
+            {
+                cv_box(geom::rectangle_3f const& r = {})
+                {
+                    min = { r.lo().x, r.lo().y, r.lo().z };
+                    max = { r.hi().x, r.hi().y, r.hi().z };
+                }
+
+                std::tuple<float, float, float> min;
+                std::tuple<float, float, float> max;
+
+                REFL_INNER(cv_box)
+                    REFL_ENTRY_NAMED(min, Field__CONTROL_CVBOX_MIN)
+                    REFL_ENTRY_NAMED(max, Field__CONTROL_CVBOX_MAX)
+                REFL_END()
+            };
         
+            optional<cv_box> cvbox;
+            optional<cv_sphere> cvsphere;
             // just wrapper 
             data_buffer buffer;
 
             REFL_INNER(control_object_param_data)
+                REFL_ENTRY_NAMED(cvbox, Field__CONTROL_CVBOX)
+                REFL_ENTRY_NAMED(cvsphere, Field__CONTROL_CVSPHERE)
                 REFL_ENTRY_NAMED(buffer, Field__DATA_BUFFER)
             REFL_END()
         };
