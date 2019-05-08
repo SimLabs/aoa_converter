@@ -17,7 +17,7 @@ namespace dict
             <
                 !is_leaf_type<T>::value && 
                 !is_container<T>::value && 
-                refl::enable_reflect_traits<T>::value
+                ::refl::enable_reflect_traits<T>::value
             >::type;
     } // type_traits
 

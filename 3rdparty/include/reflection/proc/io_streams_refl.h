@@ -22,7 +22,7 @@ namespace binary
             <
                 !is_primitive<T>::value && 
                 !is_container<T>::value && 
-                refl::enable_reflect_traits<T>::value
+                ::refl::enable_reflect_traits<T>::value
             >::type;
 
     } // type_traits
