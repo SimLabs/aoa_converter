@@ -106,6 +106,40 @@ aoa_writer::node_ptr aoa_writer::node::set_cvsphere_spec(geom::sphere_3f const &
     return shared_from_this();
 }
 
+aoa_writer::node_ptr aoa_writer::node::add_control_pos_key_spec(float key, geom::point_3f pos)
+{
+    if(!pimpl_->node_descr.controllers.control_pos)
+    {
+        pimpl_->node_descr.controllers.control_pos = boost::in_place();
+    }
+
+    pimpl_->node_descr.controllers.control_pos->keys.emplace_back(key, pos.x, pos.y, pos.z);
+    return shared_from_this();
+}
+
+aoa_writer::node_ptr aoa_writer::node::add_control_rot_key_spec(float key, geom::quaternionf rot)
+{
+    if(!pimpl_->node_descr.controllers.control_rot)
+    {
+        pimpl_->node_descr.controllers.control_rot = boost::in_place();
+    }
+
+    pimpl_->node_descr.controllers.control_rot->keys.emplace_back(key, rot.get_v().x, rot.get_v().y, rot.get_v().z, rot.get_w());
+    return shared_from_this();
+}
+
+aoa_writer::node_ptr aoa_writer::node::set_control_ref_node_spec(string name)
+{
+    if(!pimpl_->node_descr.controllers.node_ref)
+    {
+        pimpl_->node_descr.controllers.node_ref = boost::in_place();
+    }
+
+    *pimpl_->node_descr.controllers.node_ref = {name};
+
+    return shared_from_this();
+}
+
 aoa_writer::node_ptr aoa_writer::node::set_collision_stream_spec(pair<unsigned, unsigned> vertex_offset_size, pair<unsigned, unsigned> index_offset_size)
 {
     if(!pimpl_->node_descr.controllers.object_param_controller)

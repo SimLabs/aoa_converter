@@ -4,15 +4,54 @@
 #include <osg/StateSet>
 #include <osg/Material>
 #include <osg/LightSource>
+#include <osg/Geode>
 
 #include "material_loader.h"
 #include "aurora_aoa_writer.h"
+#include "cpp_utils/enum_to_string.h"
 
 namespace aurora
 {
 
 namespace
 {
+
+bool find_ignore_case(const std::string & strHaystack, const std::string & strNeedle)
+{
+    auto it = std::search(
+        strHaystack.begin(), strHaystack.end(),
+        strNeedle.begin(), strNeedle.end(),
+        [](char ch1, char ch2) { return std::toupper(ch1) == std::toupper(ch2); }
+    );
+    return (it != strHaystack.end());
+}
+
+struct detect_light_node_visitor : osg::NodeVisitor
+{
+    detect_light_node_visitor()
+        : osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_PARENTS)
+    {}
+
+    void apply(osg::Node& node) override
+    {
+        if(node.getName().find("light") != std::string::npos)
+        {
+            is_light_ = true;
+        }
+        else
+        {
+            traverse(node);
+        }
+    }
+
+    bool get_result()
+    {
+        return is_light_;
+    }
+
+    bool is_light_ = false;
+};
+
 string material_name_for_chunk(string name, material_info const& data)
 {
     if(!data.explicit_material.empty())
@@ -37,6 +76,28 @@ write_aoa_visitor::write_aoa_visitor(material_loader& l, aoa_writer& w)
 
 void write_aoa_visitor::apply(osg::Geode &geode)
 {
+    detect_light_node_visitor detect_light;
+    geode.accept(detect_light);
+    if(detect_light.get_result())
+    {
+        if(geode.getNumDrawables() == 0)
+            return;
+        else
+        {
+            auto const& config = get_config();
+            for(auto p: config.lights.light_kind_node_names_map)
+            {
+                for(auto name: p.second)
+                {
+                    if(find_ignore_case(geode.getName(), name))
+                    {
+                        lights_[*cpp_utils::string_to_enum<light_type>(p.first)].insert(&geode);
+                    }
+                }
+            }
+        }
+    }
+
     if (geode2chunks_.find(&geode) != geode2chunks_.end())
         return;
     current_geode_ = &geode;
@@ -73,40 +134,40 @@ void write_aoa_visitor::apply(osg::Geometry &geometry)
 
 void write_aoa_visitor::apply(osg::LightSource & light_source)
 {
-    auto osg_light = light_source.getLight();
-    if(osg_light->getDirection().length2() == 0.)
-    {
-        // omni light
-        aod::omni_light light;
-        light.position[0] = osg_light->getPosition()[0];
-        light.position[1] = osg_light->getPosition()[1];
-        light.position[2] = osg_light->getPosition()[2];
+    //auto osg_light = light_source.getLight();
+    //if(osg_light->getDirection().length2() == 0.)
+    //{
+    //    // omni light
+    //    aod::omni_light light;
+    //    light.position[0] = osg_light->getPosition()[0];
+    //    light.position[1] = osg_light->getPosition()[1];
+    //    light.position[2] = osg_light->getPosition()[2];
 
-        light.power = 10000.;
-        light.color = geom::colorb(osg_light->getDiffuse().r(), osg_light->getDiffuse().g(), osg_light->getDiffuse().b());
-        light.r_min = 255;
+    //    light.power = 10000.;
+    //    light.color = geom::colorb(osg_light->getDiffuse().r(), osg_light->getDiffuse().g(), osg_light->getDiffuse().b());
+    //    light.r_min = 255;
 
-        omni_lights_.push_back(light);
-    }
-    else
-    {
-        // spot light
-        aod::spot_light spot;
-        spot.position[0] = osg_light->getPosition()[0];
-        spot.position[1] = osg_light->getPosition()[1];
-        spot.position[2] = osg_light->getPosition()[2];
-        spot.power = 10000;
-        spot.color = geom::colorb(osg_light->getDiffuse().r(), osg_light->getDiffuse().g(), osg_light->getDiffuse().b());
-        spot.r_min = 1;
-        spot.dir_x = osg_light->getDirection()[0];
-        spot.dir_y = osg_light->getDirection()[1];
-        spot.dir_z = osg_light->getDirection()[2];
-        spot.mask = 0x7;
-        spot.half_fov = geom::grad2rad(45.);
-        spot.angular_power = 1.;
+    //    omni_lights_.push_back(light);
+    //}
+    //else
+    //{
+    //    // spot light
+    //    aod::spot_light spot;
+    //    spot.position[0] = osg_light->getPosition()[0];
+    //    spot.position[1] = osg_light->getPosition()[1];
+    //    spot.position[2] = osg_light->getPosition()[2];
+    //    spot.power = 10000;
+    //    spot.color = geom::colorb(osg_light->getDiffuse().r(), osg_light->getDiffuse().g(), osg_light->getDiffuse().b());
+    //    spot.r_min = 1;
+    //    spot.dir_x = osg_light->getDirection()[0];
+    //    spot.dir_y = osg_light->getDirection()[1];
+    //    spot.dir_z = osg_light->getDirection()[2];
+    //    spot.mask = 0x7;
+    //    spot.half_fov = geom::grad2rad(45.);
+    //    spot.angular_power = 1.;
 
-        spot_lights_.push_back(spot);
-    }
+    //    spot_lights_.push_back(spot);
+    //}
 }
 
 vector<size_t> const & write_aoa_visitor::get_chunks(osg::Geode const &geode) const
@@ -297,6 +358,9 @@ void write_aoa_visitor::write_aoa()
     OSG_INFO << "AOA plugin: EXTRACTED " << get_chunks().size()    << " CHUNKS"   << std::endl;
     OSG_INFO << "AOA plugin: EXTRACTED " << get_faces().size()     << " FACES"    << std::endl;
     OSG_INFO << "AOA plugin: EXTRACTED " << get_verticies().size() << " VIRTICES" << std::endl;
+
+    vector<aod::omni_light> omni_lights_;
+    vector<aod::spot_light> spot_lights_;
 
     aoa_writer_.set_omni_lights_buffer_data(omni_lights_);
     aoa_writer_.set_spot_lights_buffer_data(spot_lights_);

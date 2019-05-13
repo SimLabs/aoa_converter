@@ -6,6 +6,7 @@
 
 #include "vao.h"
 #include "aurora_aoa_writer.h"
+#include "plugin_config.h"
 
 namespace aurora
 {
@@ -51,8 +52,7 @@ private:
     vector<face>                    faces_;
     vector<chunk_info_opt_material> chunks_;
 
-    vector<aod::omni_light> omni_lights_;
-    vector<aod::spot_light> spot_lights_;
+    map<light_type, set<osg::Geode const*>> lights_;
 };
 
 using write_aoa_visitor_ptr = shared_ptr<write_aoa_visitor>;

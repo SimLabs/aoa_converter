@@ -1,6 +1,7 @@
 #pragma once
 #include "vao.h"
 #include "geometry/primitives/color.h"
+#include "geometry/primitives/quaternion.h"
 #include "geometry/half.h"
 #include "aurora_format.h"
 
@@ -138,6 +139,9 @@ struct aoa_writer
         node_ptr  set_cvbox_spec(geom::rectangle_3f const& box);
         node_ptr  set_cvsphere_spec(geom::sphere_3f const& sphere);
     private:
+        node_ptr  add_control_pos_key_spec(float key, geom::point_3f pos);
+        node_ptr  add_control_rot_key_spec(float key, geom::quaternionf rot);
+        node_ptr  set_control_ref_node_spec(string name);
         node_ptr  set_collision_stream_spec(pair<unsigned, unsigned> vertex_offset_size, pair<unsigned, unsigned> index_offset_size);
         node_ptr  add_cvmesh_spec(unsigned vao, std::pair<unsigned, unsigned> vertex_offset_size, std::pair<unsigned, unsigned> index_offset_size);
         node_ptr  add_mesh_spec(geom::rectangle_3f bbox, unsigned offset, unsigned count, unsigned base_vertex, unsigned num_vertices, string material, string shadow_material = "Shadow_Common", std::pair<unsigned, unsigned> vao_ref = {0, 0});

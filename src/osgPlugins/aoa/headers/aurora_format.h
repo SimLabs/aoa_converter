@@ -67,6 +67,15 @@ DECLARE_AURORA_FIELD(CONTROL_CVBOX)
 DECLARE_AURORA_FIELD(CONTROL_CVBOX_MIN)
 DECLARE_AURORA_FIELD(CONTROL_CVBOX_MAX)
 
+DECLARE_AURORA_FIELD(CONTROL_POS_LINEAR)
+DECLARE_AURORA_FIELD(CONTROL_ROT_LINEAR)
+DECLARE_AURORA_FIELD(CONTROL_NUMBER_KEYS)
+DECLARE_AURORA_FIELD(CONTROL_POS_KEY)
+DECLARE_AURORA_FIELD(CONTROL_ROT_KEY)
+
+DECLARE_AURORA_FIELD(CONTROL_REF_NODE)
+DECLARE_AURORA_FIELD(CONTROL_REF_NODE_NAME)
+
 DECLARE_AURORA_FIELD(LIGHTS_FILE_OFFSET_SIZE)
 DECLARE_AURORA_FIELD(LIGHTS_TYPE)
 DECLARE_AURORA_FIELD(LIGHT_BUFFER_STREAM)
@@ -485,6 +494,70 @@ struct node
             REFL_END()
         };
 
+        struct control_pos_linear
+        {
+
+            struct key_t
+            {
+                template<class... T>
+                key_t(T... args)
+                {
+                    key_pos = { args... };
+                }
+                std::tuple<float, float, float, float> key_pos;
+
+                REFL_INNER(key_t)
+                    REFL_ENTRY_NAMED(key_pos, Field__CONTROL_POS_KEY)
+                REFL_END()
+            };
+
+            vector<key_t> keys;
+
+            REFL_INNER(control_pos_linear)
+                REFL_ENTRY_NAMED_WITH_TAG(keys, Field__CONTROL_POS_KEY, aurora_vector_field_tag(Field__CONTROL_NUMBER_KEYS))
+            REFL_END()
+        };
+
+        struct control_rot_linear
+        {
+            struct key_t
+            {
+                template<class... T>
+                key_t(T... args)
+                {
+                    key_quat = {args...};
+                }
+
+                // key and quaternion of rotation (x, y, z, w)
+                std::tuple<float, float, float, float, float> key_quat;
+
+                REFL_INNER(key_t)
+                    REFL_ENTRY_NAMED(key_quat, Field__CONTROL_ROT_KEY)
+                REFL_END()
+            };
+
+            vector<key_t> keys;
+
+            REFL_INNER(control_rot_linear)
+                REFL_ENTRY_NAMED_WITH_TAG(keys, Field__CONTROL_ROT_KEY, aurora_vector_field_tag(Field__CONTROL_NUMBER_KEYS))
+            REFL_END()
+        };
+
+        struct control_node_ref
+        {
+            control_node_ref(string name = {})
+            {
+                std::get<0>(scope_name) = "GLOBAL";
+                std::get<1>(scope_name) = name;
+            }
+
+            std::tuple<string, quoted_string> scope_name;
+
+            REFL_INNER(control_node_ref)
+                REFL_ENTRY_NAMED(scope_name, Field__CONTROL_REF_NODE_NAME)
+            REFL_END()
+        };
+
         template<class T>
         unsigned count_field(optional<T> const& f) const
         {
@@ -497,7 +570,10 @@ struct node
                    count_field(treat_children) +
                    count_field(draw_mesh) +
                    count_field(draw_lightpoint) +
-                   count_field(collision_volume);
+                   count_field(collision_volume) +
+                   count_field(control_pos) + 
+                   count_field(control_rot) + 
+                   count_field(node_ref);
         }
 
         optional<control_object_param_data> object_param_controller;
@@ -505,6 +581,9 @@ struct node
         optional<string>                    draw_mesh;
         optional<string>                    draw_lightpoint;
         optional<control_collision_volume>  collision_volume;
+        optional<control_pos_linear>        control_pos;
+        optional<control_rot_linear>        control_rot;
+        optional<control_node_ref>          node_ref;
 
         REFL_INNER(controllers_t)
             auto size = lobj.num_controllers();
@@ -514,6 +593,9 @@ struct node
             REFL_ENTRY_NAMED(draw_mesh, Field__CONTROL_DRAW_MESH)
             REFL_ENTRY_NAMED(draw_lightpoint, Field__CONTROL_DRAW_LIGHTPOINT)
             REFL_ENTRY_NAMED(collision_volume, Field__CONTROL_COLLISION_VOLUME)
+            REFL_ENTRY_NAMED(control_pos, Field__CONTROL_POS_LINEAR)
+            REFL_ENTRY_NAMED(control_rot, Field__CONTROL_ROT_LINEAR)
+            REFL_ENTRY_NAMED(node_ref, Field__CONTROL_REF_NODE)
         REFL_END()
     };
 
