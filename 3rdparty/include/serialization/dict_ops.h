@@ -37,8 +37,7 @@ namespace type_traits
             value =
             (is_equal_type<T, std::string>   ::value ||
             is_equal_type<T, binary::bytes_t>::value ||
-            std::is_arithmetic<T>            ::value || 
-            std::is_enum<T>::value
+            std::is_arithmetic<T>            ::value
             )
 
         };
@@ -82,6 +81,9 @@ namespace type_traits
 
     template<class T>
     using if_aggregate = typename std::enable_if<!is_leaf_type<T>::value && !is_container<T>::value>::type;
+
+    template<class T>
+    using if_enum = std::enable_if_t<std::is_enum_v<T>>;
 
 } // type_traits
 
@@ -397,6 +399,45 @@ void read(dict_t const& dict, type& value, bool /*log_on_absence*/, type_traits:
         bin_translator::read(dict.data(), value);
     else 
         str_translator::read(dict.data(), value);
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+// enum
+
+template<class type>
+void write(
+    dict_t&         dict,
+    type const&     value,
+    type_traits::if_enum<type>* = 0)
+{
+    bool bin_fmt = dict.bin_format();
+
+    if(bin_fmt)
+        bin_translator::write(dict.data(), (uint32_t) value);
+    else
+        str_translator::write(dict.data(), value, cpp_utils::enum_to_string(value));
+
+    dict.type_kind() = details::get_type_kind(value);
+    dict.reset_format(bin_fmt);
+}
+
+template<class type>
+void read(dict_t const& dict, type& value, bool /*log_on_absence*/, type_traits::if_enum<type>* = 0) 
+{
+
+    if(dict.bin_format())
+    {
+        uint32_t bin_value;
+        str_translator::read(dict.data(), bin_value);
+        value = type(bin_value);
+    }
+    else
+    {
+        string str_value;
+        bin_translator::read(dict.data(), str_value);
+        value = *cpp_utils::string_to_enum<type>(str_value);
+    }
 }
 
 //////////////////////////////////////////////////////////////////////////

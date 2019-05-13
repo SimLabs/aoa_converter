@@ -15,6 +15,7 @@ namespace dict
         using use_reflection = 
             typename std::enable_if
             <
+                !std::is_enum<T>::value &&
                 !is_leaf_type<T>::value && 
                 !is_container<T>::value && 
                 ::refl::enable_reflect_traits<T>::value
