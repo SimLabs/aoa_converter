@@ -53,8 +53,11 @@ aoa_writer::node::~node() = default;
 
 aoa_writer::node_ptr aoa_writer::node::create_child(string name)
 {
-    node_ptr child = pimpl_->factory.create_node();
-    child->set_name(name);
+    node_ptr child = pimpl_->factory.create_node()
+        ->set_name(name);
+        
+    this->add_flags(aoa_writer::TREAT_CHILDREN);
+
     pimpl_->node_descr.children.children.push_back(name);
     return child;
 }
@@ -321,6 +324,11 @@ aoa_writer::node_ptr aoa_writer::node::set_name(string name)
 {
     pimpl_->node_descr.name = name;
     return shared_from_this();
+}
+
+string aoa_writer::node::get_name() const
+{
+    return pimpl_->node_descr.name;
 }
 
 void * aoa_writer::node::get_underlying()
@@ -698,8 +706,7 @@ aoa_writer::node_ptr aoa_writer::get_root_node()
     pimpl_->root_ = make_shared<node>(*this);
 
     return pimpl_->root_->set_name(fs::path(pimpl_->filename_).stem().string())
-        ->add_flags(aoa_writer::GLOBAL_NODE)
-        ->add_flags(aoa_writer::TREAT_CHILDREN);
+        ->add_flags(aoa_writer::GLOBAL_NODE);
 }
 
 aoa_writer & aoa_writer::add_material(string name, material_info const & mat)

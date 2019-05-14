@@ -201,11 +201,6 @@ public:
             osgUtil::Optimizer optimizer;
             optimizer.optimize(&osg_root, osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS);
 
-            // add light sources based on geometry
-            add_lights_visitor add_lights_v;
-            osg_root.accept(add_lights_v);
-            add_lights_v.add_lights();
-
             OSG_INFO << "Writing node to AOA file " << file_name << std::endl;
 
             aurora::aoa_writer file_writer(file_name);

@@ -9,12 +9,47 @@
 #include "material_loader.h"
 #include "aurora_aoa_writer.h"
 #include "cpp_utils/enum_to_string.h"
+#include "object_lights_config.h"
 
 namespace aurora
 {
 
 namespace
 {
+
+geom::rectangle_3 get_rect_from_drawable(osg::Geometry& node)
+{
+    auto& vertices = dynamic_cast<osg::Vec3Array&>(*node.getVertexArray());
+    auto num_vertices = vertices.getNumElements();
+
+    double min_x = std::numeric_limits<double>::infinity(), max_x = -std::numeric_limits<double>::infinity();
+    double min_y = std::numeric_limits<double>::infinity(), max_y = -std::numeric_limits<double>::infinity();
+    double min_z = std::numeric_limits<double>::infinity(), max_z = -std::numeric_limits<double>::infinity();
+
+    for(unsigned i = 0; i < num_vertices; ++i)
+    {
+        double x, y, z;
+        x = vertices[i][0];
+        y = vertices[i][1];
+        z = vertices[i][2];
+
+        min_x = (std::min(min_x, x));
+        min_y = (std::min(min_y, y));
+        min_z = (std::min(min_z, z));
+
+        max_x = (std::max(max_x, x));
+        max_y = (std::max(max_y, y));
+        max_z = (std::max(max_z, z));
+
+        double tol = 0.01;
+
+        if(max_x - min_x > tol &&
+           max_y - min_y > tol &&
+           max_z - min_z > tol)
+            break;
+    }
+    return geom::rectangle_3(geom::point_3(min_x, min_y, min_z), geom::point_3(max_x, max_y, max_z));
+}
 
 bool find_ignore_case(const std::string & strHaystack, const std::string & strNeedle)
 {
@@ -34,22 +69,40 @@ struct detect_light_node_visitor : osg::NodeVisitor
 
     void apply(osg::Node& node) override
     {
-        if(node.getName().find("light") != std::string::npos)
+        auto const& config = get_config();
+        for(auto p : config.lights.light_kind_node_names_map)
         {
-            is_light_ = true;
+            for(auto name : p.second)
+            {
+                if(find_ignore_case(node.getName(), name))
+                {
+                    light_type_ = *cpp_utils::string_to_enum<light_type>(p.first);
+                }
+            }
         }
-        else
+        if(light_type_ || node.getName().find("light") != std::string::npos)
+        {
+            should_remove_ = true;
+        }
+        if(!light_type_)
         {
             traverse(node);
         }
     }
 
-    bool get_result()
+    optional<light_type> get_result()
     {
-        return is_light_;
+        return light_type_;
     }
 
-    bool is_light_ = false;
+    bool should_exclude()
+    {
+        return should_remove_;
+    }
+
+private:
+    bool should_remove_ = false;
+    optional<light_type> light_type_;
 };
 
 string material_name_for_chunk(string name, material_info const& data)
@@ -84,19 +137,12 @@ void write_aoa_visitor::apply(osg::Geode &geode)
             return;
         else
         {
-            auto const& config = get_config();
-            for(auto p: config.lights.light_kind_node_names_map)
-            {
-                for(auto name: p.second)
-                {
-                    if(find_ignore_case(geode.getName(), name))
-                    {
-                        lights_[*cpp_utils::string_to_enum<light_type>(p.first)].insert(&geode);
-                    }
-                }
-            }
+            lights_[*detect_light.get_result()].insert(&geode);
         }
     }
+
+    if(detect_light.should_exclude())
+        return;
 
     if (geode2chunks_.find(&geode) != geode2chunks_.end())
         return;
@@ -147,7 +193,7 @@ void write_aoa_visitor::apply(osg::LightSource & light_source)
     //    light.color = geom::colorb(osg_light->getDiffuse().r(), osg_light->getDiffuse().g(), osg_light->getDiffuse().b());
     //    light.r_min = 255;
 
-    //    omni_lights_.push_back(light);
+    //    omni_lights.push_back(light);
     //}
     //else
     //{
@@ -166,7 +212,7 @@ void write_aoa_visitor::apply(osg::LightSource & light_source)
     //    spot.half_fov = geom::grad2rad(45.);
     //    spot.angular_power = 1.;
 
-    //    spot_lights_.push_back(spot);
+    //    spot_lights.push_back(spot);
     //}
 }
 
@@ -359,18 +405,77 @@ void write_aoa_visitor::write_aoa()
     OSG_INFO << "AOA plugin: EXTRACTED " << get_faces().size()     << " FACES"    << std::endl;
     OSG_INFO << "AOA plugin: EXTRACTED " << get_verticies().size() << " VIRTICES" << std::endl;
 
-    vector<aod::omni_light> omni_lights_;
-    vector<aod::spot_light> spot_lights_;
-
-    aoa_writer_.set_omni_lights_buffer_data(omni_lights_);
-    aoa_writer_.set_spot_lights_buffer_data(spot_lights_);
-
     aoa_writer::node_ptr root = aoa_writer_.get_root_node();
+    auto& config = get_config();
+    auto& lights_config = get_object_lights_config();
 
-    if(omni_lights_.size())
-        root->set_omni_lights(0, omni_lights_.size());
-    if(spot_lights_.size())
-        root->set_spot_lights(0, spot_lights_.size());
+    vector<aod::omni_light> omni_lights;
+    vector<aod::spot_light> spot_lights;
+    unsigned current_offset_omni = 0;
+    unsigned current_offset_spot = 0;
+
+    auto lights_node = root->create_child("lights");
+    auto lights_geom = lights_node->create_child("lights_geom");
+    unsigned ref_node_id = 0;
+
+    for(auto& p: lights_)
+    {
+        auto light_type = p.first;
+        auto lights_of_specific_type = lights_node->create_child(cpp_utils::enum_to_string(light_type) + "_lights");
+        for(auto& geode: p.second)
+        {
+            unsigned num_drawables = geode->getNumChildren();
+
+            for(unsigned i = 0; i < num_drawables; ++i)
+            {   
+                auto box = get_rect_from_drawable(dynamic_cast<osg::Geometry&>(*geode->getDrawable(i)));
+                auto box_center = box.center();
+            
+                auto it = config.lights.light_kind_node_ref.find(cpp_utils::enum_to_string(light_type));
+                if(it == config.lights.light_kind_node_ref.end())
+                {
+                    OSG_WARN << "ref node for " << light_type << " not found";
+                    continue;
+                }
+                auto const& node_ref = it->second;
+
+                // add ref to node
+                lights_geom->create_child("lights_geom_" + std::to_string(ref_node_id++))
+                    ->add_control_pos_key_spec(0, box_center)
+                    ->set_control_ref_node_spec(node_ref);
+
+                auto lights_it = lights_config.find(node_ref);
+                if(lights_it == lights_config.end())
+                    continue;
+
+                auto& ref_node_omni_light = lights_it->second.omni_lights;
+                auto& ref_node_spot_lights = lights_it->second.spot_lights;
+                auto omni_size = omni_lights.size();
+                auto spot_size = spot_lights.size();
+                std::copy(begin(ref_node_omni_light), end(ref_node_omni_light), back_inserter(omni_lights));
+                std::copy(begin(ref_node_spot_lights), end(ref_node_spot_lights), back_inserter(spot_lights));
+                auto adjust_pos = [&box_center](auto& l)
+                {
+                    l.position[0] += box_center.x;
+                    l.position[1] += box_center.y;
+                    l.position[2] += box_center.z;
+                };
+                std::for_each(begin(omni_lights) + omni_size, end(omni_lights), adjust_pos);
+                std::for_each(begin(spot_lights) + spot_size, end(spot_lights), adjust_pos);
+            }
+        }
+
+        if(omni_lights.size() != current_offset_omni)
+            lights_of_specific_type->set_omni_lights(current_offset_omni, omni_lights.size() - current_offset_omni);
+        if(spot_lights.size() != current_offset_spot)
+            lights_of_specific_type->set_spot_lights(current_offset_spot, spot_lights.size() - current_offset_spot);
+
+        current_offset_omni = omni_lights.size();
+        current_offset_spot = spot_lights.size();
+    }
+
+    aoa_writer_.set_omni_lights_buffer_data(omni_lights);
+    aoa_writer_.set_spot_lights_buffer_data(spot_lights);
 
     vector<vertex_attribute> vertex_format;
     vertex_format.push_back(vertex_attribute

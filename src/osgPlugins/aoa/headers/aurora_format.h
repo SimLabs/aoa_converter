@@ -496,22 +496,8 @@ struct node
 
         struct control_pos_linear
         {
-
-            struct key_t
-            {
-                template<class... T>
-                key_t(T... args)
-                {
-                    key_pos = { args... };
-                }
-                std::tuple<float, float, float, float> key_pos;
-
-                REFL_INNER(key_t)
-                    REFL_ENTRY_NAMED(key_pos, Field__CONTROL_POS_KEY)
-                REFL_END()
-            };
-
-            vector<key_t> keys;
+            // key and position (x, y, z)
+            vector<std::tuple<float, float, float, float>> keys;
 
             REFL_INNER(control_pos_linear)
                 REFL_ENTRY_NAMED_WITH_TAG(keys, Field__CONTROL_POS_KEY, aurora_vector_field_tag(Field__CONTROL_NUMBER_KEYS))
@@ -520,23 +506,8 @@ struct node
 
         struct control_rot_linear
         {
-            struct key_t
-            {
-                template<class... T>
-                key_t(T... args)
-                {
-                    key_quat = {args...};
-                }
-
-                // key and quaternion of rotation (x, y, z, w)
-                std::tuple<float, float, float, float, float> key_quat;
-
-                REFL_INNER(key_t)
-                    REFL_ENTRY_NAMED(key_quat, Field__CONTROL_ROT_KEY)
-                REFL_END()
-            };
-
-            vector<key_t> keys;
+            // key and quaternion of rotation (x, y, z, w)
+            vector<std::tuple<float, float, float, float, float>> keys;
 
             REFL_INNER(control_rot_linear)
                 REFL_ENTRY_NAMED_WITH_TAG(keys, Field__CONTROL_ROT_KEY, aurora_vector_field_tag(Field__CONTROL_NUMBER_KEYS))

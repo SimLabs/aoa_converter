@@ -8,7 +8,20 @@ SET(TARGET_SRC
     ${SRC_FILES}
 )
 
-FILE(GLOB HEADER_FILES headers/*.h)
+FILE(GLOB_RECURSE  HEADER_FILES
+    headers/*.h
+
+    ${ACTUAL_3RDPARTY_DIR}/include/alloc/*.h
+    ${ACTUAL_3RDPARTY_DIR}/include/binary/*.h
+    ${ACTUAL_3RDPARTY_DIR}/include/common/*.h
+    ${ACTUAL_3RDPARTY_DIR}/include/cpp_utils/*.h
+    ${ACTUAL_3RDPARTY_DIR}/include/geometry/*.h
+    ${ACTUAL_3RDPARTY_DIR}/include/logger/*.h
+    ${ACTUAL_3RDPARTY_DIR}/include/reflection/*.h
+    ${ACTUAL_3RDPARTY_DIR}/include/serialization/*.h
+)
+
+MESSAGE("${HEADER_FILES}")
 
 SET(TARGET_H
 	${HEADER_FILES}

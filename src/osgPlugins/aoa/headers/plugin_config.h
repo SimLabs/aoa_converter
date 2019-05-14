@@ -41,9 +41,11 @@ namespace aurora
         {
             // TODO: change key to light_type
             map<string, vector<string>> light_kind_node_names_map;
+            map<string, string> light_kind_node_ref;
 
             REFL_INNER(lights_config)
                 REFL_ENTRY(light_kind_node_names_map)
+                REFL_ENTRY(light_kind_node_ref)
             REFL_END()
         };
 
