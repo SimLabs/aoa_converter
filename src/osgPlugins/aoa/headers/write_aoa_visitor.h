@@ -52,7 +52,6 @@ private:
     vector<face>                    faces_;
     vector<chunk_info_opt_material> chunks_;
 
-    map<light_type, set<osg::Geode *>> lights_;
 };
 
 using write_aoa_visitor_ptr = shared_ptr<write_aoa_visitor>;

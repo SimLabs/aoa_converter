@@ -143,6 +143,16 @@ aoa_writer::node_ptr aoa_writer::node::set_control_ref_node_spec(string name)
     return shared_from_this();
 }
 
+aoa_writer::node_ptr aoa_writer::node::set_translation(geom::point_3f pos)
+{
+    return add_control_pos_key_spec(0, pos);
+}
+
+aoa_writer::node_ptr aoa_writer::node::set_rotation(geom::quaternionf rot)
+{
+    return add_control_rot_key_spec(0, rot);
+}
+
 aoa_writer::node_ptr aoa_writer::node::set_collision_stream_spec(pair<unsigned, unsigned> vertex_offset_size, pair<unsigned, unsigned> index_offset_size)
 {
     if(!pimpl_->node_descr.controllers.object_param_controller)

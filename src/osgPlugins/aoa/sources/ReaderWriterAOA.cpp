@@ -20,7 +20,7 @@
 #include "aurora_aoa_writer.h"
 #include "convert_textures_visitor.h"
 #include "fix_materials_visitor.h"
-#include "add_lights_visitor.h"
+#include "lights_generation_visitor.h"
 #include "material_loader.h"
 #include "debug_utils.h"
 #include "plugin_config.h"
@@ -131,12 +131,6 @@ public:
 
         try 
         {
-            osg::ref_ptr<osg::MatrixTransform> transform = new osg::MatrixTransform(osg::Matrix( 1, 0, 0, 0, 
-                                                                                                 0, 0, 1, 0,
-                                                                                                 0,-1, 0, 0,  
-                                                                                                 0, 0, 0, 1));
-            transform->addChild(const_cast<osg::Node*>(&node));
-
             std::vector<std::string> split_opts;
             vector<char*> argv;
             // dummy value, cause first argument must be present
@@ -160,9 +154,6 @@ public:
 
             osg::ArgumentParser arguments(&argc, argv.data());
 
-            bool flip_yz = arguments.read("--aoa-flip-yz");
-            osg::Node& osg_root = flip_yz ?  *transform : const_cast<osg::Node&>(node);
-            OSG_INFO << "flip Y and Z: " << flip_yz << "\n";
 
             string materials_file;
             arguments.read("--aoa-materials-file", materials_file);
@@ -177,6 +168,13 @@ public:
             if(config_path.empty())
                 config_path = "aoa.config.json";
             auto config = get_config(config_path);
+
+            //////////////////////////////////////////////
+            // add transform
+            osg::ref_ptr<osg::MatrixTransform> transform = new osg::MatrixTransform(config.get_full_transform());
+            transform->addChild(const_cast<osg::Node*>(&node));
+            osg::Node& osg_root = *transform;
+            OSG_INFO << "flip Y and Z: " << config.flip_YZ << "\n";
             //////////////////////////////////////////////
 
             fix_materials_visitor fix_mats_vis(mat_loader, fs::path(materials_file).parent_path().string());
@@ -186,6 +184,11 @@ public:
             aurora::convert_textures_visitor texture_visitor("dds");
             osg_root.accept(texture_visitor);
             texture_visitor.write(osgDB::getFilePath(file_name));
+
+            aurora::aoa_writer file_writer(file_name);
+            lights_generation_visitor generate_lights_v(file_writer);
+            osg_root.accept(generate_lights_v);
+            generate_lights_v.generate_lights();
 
             // apply transforms from ancestor nodes to geometry
             // optimizer will only do this for transform nodes whose data variance is STATIC so we set it here 
@@ -203,7 +206,6 @@ public:
 
             OSG_INFO << "Writing node to AOA file " << file_name << std::endl;
 
-            aurora::aoa_writer file_writer(file_name);
             aurora::write_aoa_visitor write_aoa_v(mat_loader, file_writer);
             osg_root.accept(write_aoa_v);
             write_aoa_v.write_aoa();

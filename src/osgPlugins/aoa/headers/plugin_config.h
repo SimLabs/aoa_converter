@@ -1,6 +1,7 @@
 #pragma once
 
 #include "json_io.h"
+#include <osg/Matrix>
 
 namespace aurora
 {
@@ -49,10 +50,30 @@ namespace aurora
             REFL_END()
         };
 
+        osg::Matrix get_full_transform()
+        {
+            if(!flip_YZ)
+                return transform;
+            osg::Matrix result = flip_YZ_matrix;
+            result.postMult(transform);
+            return result;
+        }
+
         lights_config lights;
+        osg::Matrix transform;
+        bool flip_YZ = false;
+
+        static const osg::Matrix flip_YZ_matrix;
+        static const osg::Matrix reverse_flip_YZ_matrix;
 
         REFL_INNER(plugin_config)
             REFL_ENTRY(lights)
+            {
+                auto& lobj_transform_array = *reinterpret_cast<std::array<osg::Matrix::value_type, 16>*>(&lobj.transform);
+                auto& robj_transform_array = *reinterpret_cast<std::array<osg::Matrix::value_type, 16>*>(&robj.transform);
+                proc(lobj_transform_array, robj_transform_array, "transform");
+            }
+            REFL_ENTRY(flip_YZ)
         REFL_END()
     };
 

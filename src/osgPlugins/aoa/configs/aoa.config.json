@@ -6,5 +6,10 @@
     "light_kind_node_ref": {
       "RUNWAY_EDGE": "ArdmLight_Elevated_White_Floodlight&Omni_Hi"
     }
-  }
+  },
+  "transform": [ 1, 0, 0, 0,
+                 0, 1, 0, 0,
+                 0, 0, 1, 0,
+                 0, 0, 0, 1 ],
+  "flip_YZ": true
 }

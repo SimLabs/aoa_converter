@@ -17,4 +17,18 @@ plugin_config& get_config(optional<string> path)
     return *instance;
 }
 
+const osg::Matrix plugin_config::flip_YZ_matrix = {
+    1, 0, 0, 0,
+    0, 0, 1, 0,
+    0, -1, 0, 0,
+    0, 0, 0, 1
+};
+
+const osg::Matrix plugin_config::reverse_flip_YZ_matrix = {
+    1, 0, 0, 0,
+    0, 0,-1, 0,
+    0, 1, 0, 0,
+    0, 0, 0, 1
+};
+
 }
