@@ -216,18 +216,15 @@ public:
         }
         catch(std::exception const& e)
         {
-            OSG_FATAL << e.what();
-            return WriteResult(WriteResult::ERROR_IN_WRITING_FILE);
+            return WriteResult(string("AOA plugin: ") + e.what());
         }
         catch(const char* e)
         {
-            OSG_FATAL << e;
-            return WriteResult(WriteResult::ERROR_IN_WRITING_FILE);
+            return WriteResult(string("AOA plugin: ") + e);
         }
         catch(...)
         {
-            OSG_FATAL << "caught unknown exception";
-            return WriteResult(WriteResult::ERROR_IN_WRITING_FILE);
+            return WriteResult("AOA plugin: caught unknown exception");
         }
 
         return WriteResult(WriteResult::FILE_SAVED);

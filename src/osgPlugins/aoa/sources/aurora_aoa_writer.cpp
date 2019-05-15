@@ -733,7 +733,7 @@ aoa_writer & aoa_writer::add_material(string name, material_info const & mat)
         break;
     }
 
-    for(unsigned i = 0; i < mat.textures.size(); i++)
+    for(unsigned i = 0; i < std::min(size_t(3), mat.textures.size()); i++)
     {
         mat_descr.textures.push_back(refl::material_list::material::material_group{ i, mat.textures[i] });
     }
