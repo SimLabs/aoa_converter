@@ -1,0 +1,31 @@
+{
+    "ArdmLight_Elevated_White_Floodlight&Omni_Hi": {
+        "omni_lights": [
+            {
+                "position": [0, 0.1, 0],
+                "power": 10001,
+                "color": {
+                    "r": 253,
+                    "g": 254,
+                    "b": 255
+                }
+            }
+        ],
+        "spot_lights": [
+            {
+                "position": [0, 0, 0],
+                "power": 100000,
+                "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 255
+                },
+                "dir_x": 1,
+                "dir_y": 0,
+                "dir_z": 0,
+                "half_fov": 0.7,
+                "angular_power": 1
+            }
+        ]
+    }
+}

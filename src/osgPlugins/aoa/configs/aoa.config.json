@@ -1,0 +1,10 @@
+{
+  "lights" : {
+    "light_kind_node_names_map": {
+      "RUNWAY_EDGE": ["RUL_VP_light"]
+    },
+    "light_kind_node_ref": {
+      "RUNWAY_EDGE": "ArdmLight_Elevated_White_Floodlight&Omni_Hi"
+    }
+  }
+}
