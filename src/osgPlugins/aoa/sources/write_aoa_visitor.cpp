@@ -321,13 +321,11 @@ void write_aoa_visitor::extract_texture_info(osg::Drawable& node, chunk_info_opt
 
         auto mat_data = material_loader_.get_material_data(mat->getName());
 
-        if(!mat_data)
+        if(mat_data && !mat_data->explicit_material.empty())
         {
-            OSG_WARN << "AOA plugin: material \"" << mat->getName() << "\" not found, skipping\n";
-            return;
+            chunk.material.explicit_material = mat_data->explicit_material;
         }
-
-        if(mat_data->explicit_material.empty())
+        else
         {
             for(unsigned int i = 0; i < state_set->getTextureAttributeList().size(); ++i)
             {
@@ -337,10 +335,6 @@ void write_aoa_visitor::extract_texture_info(osg::Drawable& node, chunk_info_opt
                     chunk.material.textures.push_back(texture->getImage()->getFileName());
                 }
             }            
-        }
-        else
-        {
-            chunk.material.explicit_material = mat_data->explicit_material;
         }
     }
 

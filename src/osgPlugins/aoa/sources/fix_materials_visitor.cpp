@@ -37,13 +37,12 @@ void fix_materials_visitor::apply(osg::Geometry & g)
     {
         osg::StateSet* state_set = pGeometry->getStateSet();
         osg::Material* mat = (osg::Material*) pGeometry->getStateSet()->getAttribute(osg::StateAttribute::MATERIAL);
-        unsigned num_textures = state_set->getNumTextureAttributeLists();
+        //unsigned num_textures = state_set->getNumTextureAttributeLists();
 
         auto mat_data = pimpl_->loader.get_material_data(mat->getName());
         if(!mat_data)
         {
-            OSG_WARN << "material \"" << mat->getName() << "\" not found, skipping\n";
-            return;
+            OSG_WARN << "material \"" << mat->getName() << "\" not found, existing textures will be used, if any\n";
         }
         else if(mat_data->explicit_material.empty())
         {
@@ -52,7 +51,7 @@ void fix_materials_visitor::apply(osg::Geometry & g)
             {
                 tex_image->setFileName(mat_data->albedo_tex);
                 osg::ref_ptr<osg::Texture> texture = new osg::Texture2D(tex_image);
-                state_set->setTextureAttribute(num_textures++, texture, osg::StateAttribute::ON);
+                state_set->setTextureAttribute(0, texture, osg::StateAttribute::ON);
             }
         }
     }
