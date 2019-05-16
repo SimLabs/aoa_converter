@@ -43,13 +43,13 @@ struct detect_light_node_visitor : osg::NodeVisitor
     void apply(osg::Node& node) override
     {
         auto const& config = get_config();
-        for(auto p : config.lights.light_kind_node_names_map)
+        for(auto p : config.lights)
         {
-            for(auto name : p.second)
+            for(auto name : p.second.find_rules)
             {
                 if(find_ignore_case(node.getName(), name))
                 {
-                    light_type_ = *cpp_utils::string_to_enum<light_type>(p.first);
+                    light_type_ = p.first;
                 }
             }
         }
@@ -63,7 +63,7 @@ struct detect_light_node_visitor : osg::NodeVisitor
         }
     }
 
-    optional<light_type> get_result()
+    optional<string> get_result()
     {
         return light_type_;
     }
@@ -75,7 +75,7 @@ struct detect_light_node_visitor : osg::NodeVisitor
 
 private:
     bool should_remove_ = false;
-    optional<light_type> light_type_;
+    optional<string> light_type_;
 };
 
 }
@@ -113,7 +113,7 @@ void aurora::lights_generation_visitor::generate_lights()
     for(auto& p : lights_)
     {
         auto light_type = p.first;
-        auto lights_of_specific_type = lights_node->create_child(cpp_utils::enum_to_string(light_type) + "_lights");
+        auto lights_of_specific_type = lights_node->create_child(light_type + "_lights");
         for(auto& geode : p.second)
         {
             unsigned num_drawables = geode->getNumChildren();
@@ -136,21 +136,21 @@ void aurora::lights_generation_visitor::generate_lights()
                 osg::Matrix ref_node_transform = get_config().flip_YZ ? get_config().reverse_flip_YZ_matrix : osg::Matrix::identity();
                 ref_node_transform.postMult(transform);
 
-                auto it = config.lights.light_kind_node_ref.find(cpp_utils::enum_to_string(light_type));
-                if(it == config.lights.light_kind_node_ref.end())
+                auto it = config.lights.find(light_type);
+                if(it == config.lights.end())
                 {
                     OSG_WARN << "ref node for " << light_type << " not found";
                     continue;
                 }
-                auto const& node_ref = it->second;
+                auto const& ref_node = it->second.ref_node;
 
                 // add ref to node
                 lights_geom->create_child("lights_geom_" + std::to_string(ref_node_id++))
                     ->set_translation(get_translation(ref_node_transform))
                     ->set_rotation(get_rotation(ref_node_transform))
-                    ->set_control_ref_node_spec(node_ref);
+                    ->set_control_ref_node_spec(ref_node);
 
-                auto lights_it = lights_config.find(node_ref);
+                auto lights_it = lights_config.find(ref_node);
                 if(lights_it == lights_config.end())
                     continue;
 

@@ -1,15 +1,14 @@
 {
   "lights" : {
-    "light_kind_node_names_map": {
-      "RUNWAY_EDGE": ["RUL_VP_light"]
-    },
-    "light_kind_node_ref": {
-      "RUNWAY_EDGE": "ArdmLight_Elevated_White_Floodlight&Omni_Hi"
-    }
+      "RUNWAY_EDGE": {
+        "find_rules": ["RUL_VP_light"],
+        "ref_node":  "ArdmLight_Elevated_White_Floodlight&Omni_Hi"
+      }
   },
   "transform": [ 1, 0, 0, 0,
                  0, 1, 0, 0,
                  0, 0, 1, 0,
-                 0, 0, 0, 1 ],
+                 0, 0, 0, 1
+  ],
   "flip_YZ": true
 }
