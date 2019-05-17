@@ -20,7 +20,7 @@ struct buffer_chunk
     kind_t kind           = MESH;
     float             lod = 0.;
     unsigned num_vertices = 0;
-    vector<vertex_attribute> vertex_format;
+    vector<aoa_writer::vertex_attribute> vertex_format;
     vector<char> data;
     vector<face> faces;
     string material;
@@ -151,6 +151,37 @@ aoa_writer::node_ptr aoa_writer::node::set_translation(geom::point_3f pos)
 aoa_writer::node_ptr aoa_writer::node::set_rotation(geom::quaternionf rot)
 {
     return add_control_rot_key_spec(0, rot);
+}
+
+aoa_writer::node_ptr aoa_writer::node::set_channel_file(string name)
+{
+    pimpl_->node_descr.channel_filename = name;
+    return shared_from_this();
+}
+
+aoa_writer::node_ptr aoa_writer::node::set_control_light_power_spec(string channel, vector<std::tuple<float, float>> keys, pair<arg_out_of_range_action, arg_out_of_range_action> out_of_range)
+{
+    if(!pimpl_->node_descr.controllers.control_light_power)
+    {
+        pimpl_->node_descr.controllers.control_light_power = boost::in_place();
+    }
+
+    pimpl_->node_descr.controllers.control_light_power->keys = keys;
+    pimpl_->node_descr.controllers.control_light_power->channel = channel;
+    pimpl_->node_descr.controllers.control_light_power->out_of_range_actions = {out_of_range.first, out_of_range.second};
+
+    return shared_from_this();
+}
+
+aoa_writer::node_ptr aoa_writer::node::add_float_arg_spec(string channel, float def_value)
+{
+    if(!pimpl_->node_descr.args)
+    {
+        pimpl_->node_descr.args = boost::in_place();
+    }
+
+    pimpl_->node_descr.args->args.emplace_back(channel, refl::node::arg_type::FLOAT, def_value);
+    return shared_from_this();
 }
 
 aoa_writer::node_ptr aoa_writer::node::set_collision_stream_spec(pair<unsigned, unsigned> vertex_offset_size, pair<unsigned, unsigned> index_offset_size)
@@ -353,11 +384,6 @@ void * aoa_writer::node::get_underlying()
 
 namespace aurora
 {
-
-using vertex_attribute = refl::data_buffer::vao_buffer::vertex_format::vertex_attribute;
-
-using aurora::refl::vertex_attrs::type_t;
-using aurora::refl::vertex_attrs::mode_t;
 
 namespace
 {

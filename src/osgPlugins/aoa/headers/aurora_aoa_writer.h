@@ -9,12 +9,11 @@ namespace aurora
 
 struct write_aoa_visitor;
 
-using aurora::refl::vertex_attrs::type_t;
-using aurora::refl::vertex_attrs::mode_t;
-using vertex_attribute = refl::data_buffer::vao_buffer::vertex_format::vertex_attribute;
-
 struct aoa_writer
 {
+    using vertex_attribute = refl::data_buffer::vao_buffer::vertex_format::vertex_attribute;
+    using arg_out_of_range_action = refl::node::controllers_t::arg_out_of_range_action;
+
     enum node_flags
     {
         TREAT_CHILDREN   = 0x1,
@@ -68,6 +67,10 @@ struct aoa_writer
         node_ptr  set_control_ref_node_spec(string name);
         node_ptr  set_translation(geom::point_3f pos);
         node_ptr  set_rotation(geom::quaternionf rot);
+        node_ptr  set_channel_file(string name);
+        node_ptr  set_control_light_power_spec(string channel, vector<std::tuple<float, float>> keys = {{0.f, 0.f}, {1.f, 1.f}},
+            pair<arg_out_of_range_action, arg_out_of_range_action> out_of_range = {arg_out_of_range_action::CONSTANT, arg_out_of_range_action::CONSTANT});
+        node_ptr  add_float_arg_spec(string channel, float def_value);
     private:
         node_ptr  add_control_pos_key_spec(float key, geom::point_3f pos);
         node_ptr  add_control_rot_key_spec(float key, geom::quaternionf rot);

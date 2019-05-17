@@ -1,6 +1,6 @@
 #pragma once
 #include "aurora_format.h"
-
+#include "cpp_utils/enum_to_string.h"
 
 namespace aurora
 {
@@ -11,8 +11,7 @@ struct is_leaf_type
     enum
     {
         value = (std::is_same_v<std::remove_reference_t<T>, std::string>  ||
-                 std::is_arithmetic_v<std::remove_reference_t<T>> ||
-                 std::is_enum_v<std::remove_reference_t<T>>
+                 std::is_arithmetic_v<std::remove_reference_t<T>>
          )
     };
 };
@@ -22,6 +21,10 @@ struct is_flat_type;
 
 template<class... Args>
 struct is_flat_type<std::tuple<Args...>>: std::integral_constant<bool, true>
+{};
+
+template<class Type, size_t Size>
+struct is_flat_type<std::array<Type, Size>>: std::integral_constant<bool, true>
 {};
 
 template<class T>
@@ -57,6 +60,12 @@ struct flat_struct_processor
     void operator()(Type& value, const char* key, std::enable_if_t<is_leaf_type_v<Type>>* = nullptr)
     {
         out_ << value << "\t";
+    }
+
+    template<class Type>
+    void operator()(Type& value, const char* key, std::enable_if_t<std::is_enum_v<Type>>* = nullptr)
+    {
+        out_ << cpp_utils::enum_to_string(value) << "\t";
     }
 
     void operator()(refl::quoted_string& value, const char* key)

@@ -31,6 +31,7 @@ namespace aurora
         map<string, node_ref_settings> lights;
         osg::Matrix transform;
         bool flip_YZ = false;
+        string channel_file;
 
         static const osg::Matrix flip_YZ_matrix;
         static const osg::Matrix reverse_flip_YZ_matrix;
@@ -43,6 +44,7 @@ namespace aurora
                 proc(lobj_transform_array, robj_transform_array, "transform");
             }
             REFL_ENTRY(flip_YZ)
+            REFL_ENTRY(channel_file);
         REFL_END()
     };
 

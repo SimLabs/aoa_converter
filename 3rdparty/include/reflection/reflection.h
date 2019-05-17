@@ -113,6 +113,17 @@ void reflect2(processor& proc,  std::tuple<Args...> const& lhs, std::tuple<Args.
     reflect_helper<std::tuple_size<type>::value>::reflect2_tuple(proc, lobj, robj);
 }
 
+template<class processor, class Type, size_t Size>
+void reflect2(processor& proc, std::array<Type, Size> const& lhs, std::array<Type, Size> const& rhs)
+{
+    using type = std::array<Type, Size>;
+    type& lobj = const_cast<type&>(lhs);/*small hack*/
+    type& robj = const_cast<type&>(rhs);/*small hack*/
+
+    for(size_t i = 0; i < Size; ++i)
+        proc(lobj[i], robj[i], boost::lexical_cast<std::string>(i).c_str());
+}
+
 namespace refl
 {
     template<class T>

@@ -76,6 +76,14 @@ DECLARE_AURORA_FIELD(CONTROL_ROT_KEY)
 DECLARE_AURORA_FIELD(CONTROL_REF_NODE)
 DECLARE_AURORA_FIELD(CONTROL_REF_NODE_NAME)
 
+DECLARE_AURORA_FIELD(CONTROL_LIGHTPOINT_POWER_MUL)
+DECLARE_AURORA_FIELD(CONTROL_OUT_OF_RANGE)
+DECLARE_AURORA_FIELD(CONTROL_KEY_CHANNEL)
+DECLARE_AURORA_FIELD(CONTROL_LIGHTPOINT_POWER_MUL_KEY)
+DECLARE_AURORA_FIELD(CHANNEL_FILENAME)
+DECLARE_AURORA_FIELD(DEF_ARG)
+DECLARE_AURORA_FIELD(ARG)
+
 DECLARE_AURORA_FIELD(LIGHTS_FILE_OFFSET_SIZE)
 DECLARE_AURORA_FIELD(LIGHTS_TYPE)
 DECLARE_AURORA_FIELD(LIGHT_BUFFER_STREAM)
@@ -129,48 +137,6 @@ struct quoted_string
         REFL_ENTRY(value)
     REFL_END()
 };
-
-namespace vertex_attrs
-{
-
-enum type_t {
-    UNSIGNED_INT_2_10_10_10_REV,
-    INT_2_10_10_10_REV,
-    UNSIGNED_INT,
-    INT,
-    UNSIGNED_BYTE,
-    BYTE,
-    FLOAT,
-    HALF_FLOAT
-};
-
-enum mode_t {
-    ATTR_MODE_INT,
-    ATTR_MODE_FLOAT,
-    ATTR_MODE_FIXED,
-    ATTR_MODE_PACKED
-};
-
-ENUM_DECL(vertex_attrs::type_t)
-    ENUM_DECL_ENTRY(UNSIGNED_INT_2_10_10_10_REV)
-    ENUM_DECL_ENTRY(INT_2_10_10_10_REV)
-    ENUM_DECL_ENTRY(UNSIGNED_INT)
-    ENUM_DECL_ENTRY(INT)
-    ENUM_DECL_ENTRY(UNSIGNED_BYTE)
-    ENUM_DECL_ENTRY(BYTE)
-    ENUM_DECL_ENTRY(FLOAT)
-    ENUM_DECL_ENTRY(HALF_FLOAT)
-ENUM_DECL_END()
-
-
-ENUM_DECL(vertex_attrs::mode_t)
-    ENUM_DECL_ENTRY(ATTR_MODE_INT)
-    ENUM_DECL_ENTRY(ATTR_MODE_FLOAT)
-    ENUM_DECL_ENTRY(ATTR_MODE_FIXED)
-    ENUM_DECL_ENTRY(ATTR_MODE_PACKED)
-ENUM_DECL_END()
-
-}
 
 enum node_scope_t {
     GLOBAL
@@ -234,10 +200,47 @@ struct data_buffer
         {   
             struct vertex_attribute
             {
+                enum type_t {
+                    UNSIGNED_INT_2_10_10_10_REV,
+                    INT_2_10_10_10_REV,
+                    UNSIGNED_INT,
+                    INT,
+                    UNSIGNED_BYTE,
+                    BYTE,
+                    FLOAT,
+                    HALF_FLOAT
+                };
+
+                enum mode_t {
+                    ATTR_MODE_INT,
+                    ATTR_MODE_FLOAT,
+                    ATTR_MODE_FIXED,
+                    ATTR_MODE_PACKED
+                };
+
+                ENUM_DECL_INNER(type_t)
+                    ENUM_DECL_ENTRY(UNSIGNED_INT_2_10_10_10_REV)
+                    ENUM_DECL_ENTRY(INT_2_10_10_10_REV)
+                    ENUM_DECL_ENTRY(UNSIGNED_INT)
+                    ENUM_DECL_ENTRY(INT)
+                    ENUM_DECL_ENTRY(UNSIGNED_BYTE)
+                    ENUM_DECL_ENTRY(BYTE)
+                    ENUM_DECL_ENTRY(FLOAT)
+                    ENUM_DECL_ENTRY(HALF_FLOAT)
+                ENUM_DECL_END()
+
+
+                ENUM_DECL_INNER(mode_t)
+                    ENUM_DECL_ENTRY(ATTR_MODE_INT)
+                    ENUM_DECL_ENTRY(ATTR_MODE_FLOAT)
+                    ENUM_DECL_ENTRY(ATTR_MODE_FIXED)
+                    ENUM_DECL_ENTRY(ATTR_MODE_PACKED)
+                ENUM_DECL_END()
+
                 unsigned id;
                 unsigned size;
-                vertex_attrs::type_t   type;
-                vertex_attrs::mode_t   mode;
+                type_t   type;
+                mode_t   mode;
                 unsigned divisor;
 
 
@@ -529,6 +532,35 @@ struct node
             REFL_END()
         };
 
+        enum arg_out_of_range_action
+        {
+            NONE,
+            CONSTANT,
+            CYCLE,
+            PINGPONG
+        };
+
+        ENUM_DECL_INNER(arg_out_of_range_action)
+            ENUM_DECL_ENTRY(NONE)
+            ENUM_DECL_ENTRY(CONSTANT)
+            ENUM_DECL_ENTRY(CYCLE)
+            ENUM_DECL_ENTRY(PINGPONG)
+        ENUM_DECL_END()
+
+        struct control_lightpoint_power_mul
+        {
+
+            std::array<arg_out_of_range_action, 2> out_of_range_actions = {};
+            quoted_string               channel;
+            vector<std::tuple<float, float>> keys;
+
+            REFL_INNER(control_lightpoint_power_mul)
+                REFL_ENTRY_NAMED(out_of_range_actions, Field__CONTROL_OUT_OF_RANGE)
+                REFL_ENTRY_NAMED(channel, Field__CONTROL_KEY_CHANNEL)
+                REFL_ENTRY_NAMED_WITH_TAG(keys, Field__CONTROL_LIGHTPOINT_POWER_MUL_KEY, aurora_vector_field_tag(Field__CONTROL_NUMBER_KEYS))
+            REFL_END()
+        };
+
         template<class T>
         unsigned count_field(optional<T> const& f) const
         {
@@ -544,7 +576,8 @@ struct node
                    count_field(collision_volume) +
                    count_field(control_pos) + 
                    count_field(control_rot) + 
-                   count_field(node_ref);
+                   count_field(node_ref) +
+                   count_field(control_light_power);
         }
 
         optional<control_object_param_data> object_param_controller;
@@ -555,6 +588,7 @@ struct node
         optional<control_pos_linear>        control_pos;
         optional<control_rot_linear>        control_rot;
         optional<control_node_ref>          node_ref;
+        optional<control_lightpoint_power_mul> control_light_power;
 
         REFL_INNER(controllers_t)
             auto size = lobj.num_controllers();
@@ -567,6 +601,7 @@ struct node
             REFL_ENTRY_NAMED(control_pos, Field__CONTROL_POS_LINEAR)
             REFL_ENTRY_NAMED(control_rot, Field__CONTROL_ROT_LINEAR)
             REFL_ENTRY_NAMED(node_ref, Field__CONTROL_REF_NODE)
+            REFL_ENTRY_NAMED(control_light_power, Field__CONTROL_LIGHTPOINT_POWER_MUL)
         REFL_END()
     };
 
@@ -581,10 +616,31 @@ struct node
         REFL_END()
     };
 
+    enum arg_type
+    {
+        FLOAT
+    };
+
+    ENUM_DECL_INNER(arg_type)
+        ENUM_DECL_ENTRY(FLOAT)
+    ENUM_DECL_END()
+
+    struct def_args
+    {
+
+        vector<std::tuple<quoted_string, arg_type, float>> args;
+
+        REFL_INNER(def_args)
+            REFL_ENTRY_NAMED(args, Field__ARG)
+        REFL_END()
+    };
+
     quoted_string name;
     optional<string> scope;
     unsigned flags;
     unsigned draw_order = 0;
+    optional<quoted_string> channel_filename;
+    optional<def_args> args;
     node_children children;
     optional<mesh_t> mesh;
     controllers_t controllers;
@@ -594,6 +650,8 @@ struct node
         REFL_ENTRY_NAMED(name, Field__NODE_NAME)
         REFL_ENTRY_NAMED(scope,  Field__NODE_SCOPE)
         REFL_ENTRY_NAMED(draw_order, Field__DRAW_ORDER)
+        REFL_ENTRY_NAMED(channel_filename, Field__CHANNEL_FILENAME)
+        REFL_ENTRY_NAMED(args, Field__DEF_ARG)
         REFL_ENTRY_NAMED(children, Field__NODE_CHILDS)
         REFL_ENTRY_NAMED(controllers, Field__CONTROLLERS)
         REFL_ENTRY_NAMED(mesh, Field__MESH)

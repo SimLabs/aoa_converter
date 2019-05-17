@@ -328,28 +328,29 @@ void write_aoa_visitor::write_aoa()
 
     aoa_writer::node_ptr root = aoa_writer_.get_root_node();
 
+    using vertex_attribute = aoa_writer::vertex_attribute;
     vector<vertex_attribute> vertex_format;
     vertex_format.push_back(vertex_attribute
     {   /*.id      = */ 0,
                                           /*.size    = */ 3,
-                                          /*.type    = */ type_t::FLOAT,
-                                          /*.mode    = */ mode_t::ATTR_MODE_FLOAT,
+                                          /*.type    = */ vertex_attribute::type_t::FLOAT,
+                                          /*.mode    = */ vertex_attribute::mode_t::ATTR_MODE_FLOAT,
                                           /*.divisor = */ 0
     });
 
     vertex_format.push_back(vertex_attribute
     {   /*.id      = */ 1,
                                           /*.size    = */ 3,
-                                          /*.type    = */ type_t::FLOAT,
-                                          /*.mode    = */ mode_t::ATTR_MODE_FLOAT,
+                                          /*.type    = */ vertex_attribute::type_t::FLOAT,
+                                          /*.mode    = */ vertex_attribute::mode_t::ATTR_MODE_FLOAT,
                                           /*.divisor = */ 0
     });
 
     vertex_format.push_back(vertex_attribute
     {   /*.id      = */ 4,
                                           /*.size    = */ 2,
-                                          /*.type    = */ type_t::FLOAT,
-                                          /*.mode    = */ mode_t::ATTR_MODE_FLOAT,
+                                          /*.type    = */ vertex_attribute::type_t::FLOAT,
+                                          /*.mode    = */ vertex_attribute::mode_t::ATTR_MODE_FLOAT,
                                           /*.divisor = */ 0
     });
 

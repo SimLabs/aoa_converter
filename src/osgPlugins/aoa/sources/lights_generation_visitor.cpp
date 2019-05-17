@@ -110,10 +110,11 @@ void aurora::lights_generation_visitor::generate_lights()
     auto lights_geom = lights_node->create_child("lights_geom");
     unsigned ref_node_id = 0;
 
-    for(auto& p : lights_)
+    for(auto const& p : lights_)
     {
         auto light_type = p.first;
         auto lights_of_specific_type = lights_node->create_child(light_type + "_lights");
+        lights_of_specific_type->set_control_light_power_spec(p.first);
         for(auto& geode : p.second)
         {
             unsigned num_drawables = geode->getNumChildren();
@@ -187,6 +188,17 @@ void aurora::lights_generation_visitor::generate_lights()
 
         current_offset_omni = omni_lights.size();
         current_offset_spot = spot_lights.size();
+    }
+
+    if(config.channel_file.empty())
+    {
+        OSG_WARN << "AOA plugin: channel file was not specified" << std::endl;
+    }
+    else
+        lights_node->set_channel_file(config.channel_file);
+    for(auto const& p: config.lights)
+    {
+        lights_node->add_float_arg_spec(p.first, 1.);
     }
 
     aoa_writer_.set_omni_lights_buffer_data(omni_lights);
