@@ -28,8 +28,6 @@ struct aoa_writer
     struct node;
     using node_ptr = std::shared_ptr<node>;
 
-    void set_omni_lights_buffer_data(vector<aod::omni_light> const& data);
-    void set_spot_lights_buffer_data(vector<aod::spot_light> const& data);
 
     node_ptr get_root_node();
     node_ptr create_top_level_node();
@@ -60,6 +58,8 @@ struct aoa_writer
             return add_collision_mesh_impl(reinterpret_cast<const char*>(attributes.data()), attributes.size() * sizeof(T), attributes.size(), faces, format);
         }
 
+        void set_omni_lights_buffer_data(vector<aod::omni_light> const& data);
+        void set_spot_lights_buffer_data(vector<aod::spot_light> const& data);
         node_ptr set_omni_lights(unsigned offset, unsigned size);
         node_ptr set_spot_lights(unsigned offset, unsigned size);
 

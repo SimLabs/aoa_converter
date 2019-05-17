@@ -10,6 +10,37 @@ using geometry_buffer_stream = refl::node::controllers_t::control_object_param_d
 using light_buffer_stream = refl::node::controllers_t::control_object_param_data::data_buffer::light_buffer_stream;
 using collision_buffer_stream = refl::node::controllers_t::control_object_param_data::data_buffer::collision_buffer_stream;
 
+namespace
+{
+struct lights_buffer
+{
+    vector<aod::omni_light> omni_lights;
+    vector<aod::spot_light> spot_lights;
+
+    size_t size() const
+    {
+        return omni_size() + spot_size();
+    }
+
+    template<class T>
+    void write(T& out) const
+    {
+        out.write(reinterpret_cast<const char*>(omni_lights.data()), omni_size());
+        out.write(reinterpret_cast<const char*>(spot_lights.data()), spot_size());
+    }
+
+    size_t omni_size() const
+    {
+        return sizeof(std::remove_reference_t<decltype(this->omni_lights)>::value_type) * omni_lights.size();
+    }
+
+    size_t spot_size() const
+    {
+        return sizeof(std::remove_reference_t<decltype(this->spot_lights)>::value_type) * spot_lights.size();
+    }
+};
+}
+
 struct buffer_chunk
 {
     enum kind_t
@@ -39,6 +70,7 @@ struct aoa_writer::node::impl
     vector<buffer_chunk> buffer_chunks;
     aoa_writer& factory;
     refl::node node_descr;
+    lights_buffer lights_buf;
 };
 
 aoa_writer::node::node(aoa_writer& writer)
@@ -422,34 +454,6 @@ struct buffer_chunk_cmp
     }
 };
 
-struct lights_buffer
-{
-    vector<aod::omni_light> omni_lights;
-    vector<aod::spot_light> spot_lights;
-
-    size_t size() const
-    {
-        return omni_size() + spot_size();
-    }
-
-    template<class T>
-    void write(T& out) const
-    {
-        out.write(reinterpret_cast<const char*>(omni_lights.data()), omni_size());
-        out.write(reinterpret_cast<const char*>(spot_lights.data()), spot_size());
-    }
-
-    size_t omni_size() const
-    {
-        return sizeof(std::remove_reference_t<decltype(this->omni_lights)>::value_type) * omni_lights.size();
-    }
-
-    size_t spot_size() const
-    {
-        return sizeof(std::remove_reference_t<decltype(this->spot_lights)>::value_type) * spot_lights.size();
-    }
-};
-
 struct collision_buffer
 {
     size_t size() const
@@ -491,6 +495,11 @@ struct aoa_writer::impl
             }
         }
         return result;
+    }
+
+    size_t current_buffer_offset()
+    {
+        return file_.tellp();
     }
 
     pair<unsigned, unsigned> process_mesh_chunks(vector<buffer_chunk>& nodes_buffer_chunks)
@@ -638,6 +647,30 @@ struct aoa_writer::impl
         }
     }
 
+    void write_lights_data()
+    {
+        std::for_each(begin(nodes_), end(nodes_),
+        [this](auto& n)
+        {
+            if(n->pimpl_->lights_buf.omni_size())
+                n->add_omnilights_stream(current_buffer_offset(), n->pimpl_->lights_buf.omni_size());
+            if(n->pimpl_->lights_buf.spot_size())
+                n->add_spotlights_stream(current_buffer_offset(), n->pimpl_->lights_buf.spot_size());
+            n->pimpl_->lights_buf.write(*this);
+        });
+    }
+
+    size_t lights_buffer_size()
+    {
+        size_t result = 0;
+        for(auto& n: nodes_)
+        {
+            result += n->pimpl_->lights_buf.omni_size();
+            result += n->pimpl_->lights_buf.spot_size();
+        }
+        return result;
+    }
+
     aoa_writer& self_;
     string   filename_;
     string   buffer_file_;
@@ -647,7 +680,6 @@ struct aoa_writer::impl
     refl::aurora_format aoa_descr_;
 
     collision_buffer      collision_buffer_;
-    lights_buffer         lights_buffer_;
 };
 
 aoa_writer::aoa_writer(string path)
@@ -677,7 +709,7 @@ void aoa_writer::save_data()
     auto [index_buffer_size, vertex_buffer_size] = pimpl_->process_mesh_chunks(mesh_chunks);
     auto [col_index_buffer_size, col_vertex_buffer_size] = pimpl_->process_collision_chunks(collision_chunks);
     unsigned collision_buffer_size = col_index_buffer_size + col_vertex_buffer_size;
-    unsigned light_buffer_size = pimpl_->lights_buffer_.size();
+    unsigned light_buffer_size = pimpl_->lights_buffer_size();
 
     // create buffer file description
 
@@ -688,9 +720,24 @@ void aoa_writer::save_data()
     buffer_descr.vertex_file_offset_size = { AOD_HEADER_SIZE + collision_buffer_size + light_buffer_size + index_buffer_size, vertex_buffer_size };
 
     get_root_node()
-        ->set_collision_stream_spec({ AOD_HEADER_SIZE + col_index_buffer_size, col_vertex_buffer_size }, { AOD_HEADER_SIZE, col_index_buffer_size })
-        ->add_omnilights_stream(AOD_HEADER_SIZE + collision_buffer_size, pimpl_->lights_buffer_.omni_size())
-        ->add_spotlights_stream(AOD_HEADER_SIZE + collision_buffer_size + pimpl_->lights_buffer_.omni_size(), pimpl_->lights_buffer_.spot_size());
+        ->set_collision_stream_spec({ AOD_HEADER_SIZE + col_index_buffer_size, col_vertex_buffer_size }, { AOD_HEADER_SIZE, col_index_buffer_size });
+
+    // write data
+    pimpl_->write_index_data(collision_chunks);
+    pimpl_->write_vertex_data(collision_chunks);
+
+    pimpl_->write_lights_data();
+
+    pimpl_->write_index_data(mesh_chunks);
+    pimpl_->write_vertex_data(mesh_chunks);
+    // write sizes of section to the header
+
+    pimpl_->file_.seekp(8);
+
+    pimpl_->write(&collision_buffer_size, sizeof(unsigned));
+    pimpl_->write(&light_buffer_size, sizeof(unsigned));
+    pimpl_->write(&index_buffer_size, sizeof(unsigned));
+    pimpl_->write(&vertex_buffer_size, sizeof(unsigned));
 
     // write aoa file
     write_processor proc;
@@ -709,31 +756,16 @@ void aoa_writer::save_data()
 
     std::ofstream aoa_file(pimpl_->filename_);
     aoa_file << proc.result();
-
-    // write data
-    pimpl_->write_index_data(collision_chunks);
-    pimpl_->write_vertex_data(collision_chunks);
-    pimpl_->lights_buffer_.write(*pimpl_);
-    pimpl_->write_index_data(mesh_chunks);
-    pimpl_->write_vertex_data(mesh_chunks);
-    // write sizes of section to the header
-
-    pimpl_->file_.seekp(8);
-
-    pimpl_->write(&collision_buffer_size, sizeof(unsigned));
-    pimpl_->write(&light_buffer_size, sizeof(unsigned));
-    pimpl_->write(&index_buffer_size, sizeof(unsigned));
-    pimpl_->write(&vertex_buffer_size, sizeof(unsigned));
 }
 
-void aoa_writer::set_omni_lights_buffer_data(vector<aod::omni_light> const & data)
+void aoa_writer::node::set_omni_lights_buffer_data(vector<aod::omni_light> const & data)
 {
-    pimpl_->lights_buffer_.omni_lights = data;
+    pimpl_->lights_buf.omni_lights = data;
 }
 
-void aoa_writer::set_spot_lights_buffer_data(vector<aod::spot_light> const & data)
+void aoa_writer::node::set_spot_lights_buffer_data(vector<aod::spot_light> const & data)
 {
-    pimpl_->lights_buffer_.spot_lights = data;
+    pimpl_->lights_buf.spot_lights = data;
 }
 
 aoa_writer::node_ptr aoa_writer::get_root_node()
