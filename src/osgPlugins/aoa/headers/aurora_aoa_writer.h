@@ -32,6 +32,7 @@ struct aoa_writer
     void set_spot_lights_buffer_data(vector<aod::spot_light> const& data);
 
     node_ptr get_root_node();
+    node_ptr create_top_level_node();
     aoa_writer& add_material(string name, material_info const& mat);
     void save_data();
 
@@ -62,9 +63,10 @@ struct aoa_writer
         node_ptr set_omni_lights(unsigned offset, unsigned size);
         node_ptr set_spot_lights(unsigned offset, unsigned size);
 
+        node_ptr set_name(string name);
         node_ptr  set_cvbox_spec(geom::rectangle_3f const& box);
         node_ptr  set_cvsphere_spec(geom::sphere_3f const& sphere);
-        node_ptr  set_control_ref_node_spec(string name);
+        node_ptr  set_control_ref_node_spec(string name, optional<string> sub_channel = boost::none);
         node_ptr  set_translation(geom::point_3f pos);
         node_ptr  set_rotation(geom::quaternionf rot);
         node_ptr  set_channel_file(string name);
@@ -82,7 +84,6 @@ struct aoa_writer
         node_ptr  add_geometry_stream(float lod, pair<unsigned, unsigned> vertex_offset_size, pair<unsigned, unsigned> index_offset_size);
         node_ptr  add_omnilights_stream(unsigned offset, unsigned size);
         node_ptr  add_spotlights_stream(unsigned offset, unsigned size);
-        node_ptr set_name(string name);
         string   get_name() const;
         void* get_underlying();
 

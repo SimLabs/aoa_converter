@@ -46,12 +46,19 @@ void fix_materials_visitor::apply(osg::Geometry & g)
         }
         else if(mat_data->explicit_material.empty())
         {
-            osg::ref_ptr<osg::Image> tex_image = osgDB::readRefImageFile((fs::path(pimpl_->relative_dir) / mat_data->albedo_tex).string());
-            if(tex_image)
+            if(!mat_data->albedo_tex.empty())
             {
-                tex_image->setFileName(mat_data->albedo_tex);
-                osg::ref_ptr<osg::Texture> texture = new osg::Texture2D(tex_image);
-                state_set->setTextureAttribute(0, texture, osg::StateAttribute::ON);
+                osg::ref_ptr<osg::Image> tex_image = osgDB::readRefImageFile((fs::path(pimpl_->relative_dir) / mat_data->albedo_tex).string());
+                if(tex_image)
+                {
+                    tex_image->setFileName(mat_data->albedo_tex);
+                    osg::ref_ptr<osg::Texture> texture = new osg::Texture2D(tex_image);
+                    state_set->setTextureAttribute(0, texture, osg::StateAttribute::ON);
+                }
+            } 
+            else
+            {
+                OSG_WARN << "material " << mat->getName() << " is defined but its texture is not" << std::endl;
             }
         }
     }

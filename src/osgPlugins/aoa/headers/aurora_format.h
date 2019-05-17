@@ -75,6 +75,7 @@ DECLARE_AURORA_FIELD(CONTROL_ROT_KEY)
 
 DECLARE_AURORA_FIELD(CONTROL_REF_NODE)
 DECLARE_AURORA_FIELD(CONTROL_REF_NODE_NAME)
+DECLARE_AURORA_FIELD(CONTROL_REF_ARGV_CHANNEL)
 
 DECLARE_AURORA_FIELD(CONTROL_LIGHTPOINT_POWER_MUL)
 DECLARE_AURORA_FIELD(CONTROL_OUT_OF_RANGE)
@@ -519,16 +520,19 @@ struct node
 
         struct control_node_ref
         {
-            control_node_ref(string name = {})
+            control_node_ref(string name = {}, optional<string> sub_ch = boost::none)
             {
                 std::get<0>(scope_name) = "GLOBAL";
                 std::get<1>(scope_name) = name;
+                sub_channel = sub_ch ? optional<quoted_string>(*sub_ch) : boost::none;
             }
 
             std::tuple<string, quoted_string> scope_name;
+            optional<quoted_string>           sub_channel;
 
             REFL_INNER(control_node_ref)
                 REFL_ENTRY_NAMED(scope_name, Field__CONTROL_REF_NODE_NAME)
+                REFL_ENTRY_NAMED(sub_channel, Field__CONTROL_REF_ARGV_CHANNEL)
             REFL_END()
         };
 

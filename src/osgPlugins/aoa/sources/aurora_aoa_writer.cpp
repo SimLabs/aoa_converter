@@ -131,14 +131,14 @@ aoa_writer::node_ptr aoa_writer::node::add_control_rot_key_spec(float key, geom:
     return shared_from_this();
 }
 
-aoa_writer::node_ptr aoa_writer::node::set_control_ref_node_spec(string name)
+aoa_writer::node_ptr aoa_writer::node::set_control_ref_node_spec(string name, optional<string> sub_channel)
 {
     if(!pimpl_->node_descr.controllers.node_ref)
     {
         pimpl_->node_descr.controllers.node_ref = boost::in_place();
     }
 
-    *pimpl_->node_descr.controllers.node_ref = {name};
+    *pimpl_->node_descr.controllers.node_ref = {name, sub_channel};
 
     return shared_from_this();
 }
@@ -696,12 +696,14 @@ void aoa_writer::save_data()
     write_processor proc;
 
     assert(pimpl_->root_);
-    pimpl_->aoa_descr_.nodes.push_back(*(refl::node*)pimpl_->root_->get_underlying());
 
-    for(auto& n : pimpl_->nodes_)
-    {
-        pimpl_->aoa_descr_.nodes.push_back(*(refl::node*)n->get_underlying());
-    }
+    std::for_each(rbegin(pimpl_->nodes_), rend(pimpl_->nodes_), 
+        [this](auto& n)
+        {
+            pimpl_->aoa_descr_.nodes.push_back(*(refl::node*)n->get_underlying());
+        }
+    );
+    pimpl_->aoa_descr_.nodes.push_back(*(refl::node*)pimpl_->root_->get_underlying());
 
     reflect(proc, pimpl_->aoa_descr_);
 
@@ -743,6 +745,11 @@ aoa_writer::node_ptr aoa_writer::get_root_node()
 
     return pimpl_->root_->set_name(fs::path(pimpl_->filename_).stem().string())
         ->add_flags(aoa_writer::GLOBAL_NODE);
+}
+
+aoa_writer::node_ptr aurora::aoa_writer::create_top_level_node()
+{
+    return create_node()->add_flags(aoa_writer::GLOBAL_NODE);
 }
 
 aoa_writer & aoa_writer::add_material(string name, material_info const & mat)

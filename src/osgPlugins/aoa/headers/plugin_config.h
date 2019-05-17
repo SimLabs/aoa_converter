@@ -27,8 +27,9 @@ namespace aurora
             return result;
         }
 
-        // key is the channel name that controls the lights
-        map<string, node_ref_settings> lights;
+        // key1 (channel prefix) -> key2 (channel name) -> ref node settings
+        // so you can type something like setArgFloat("key1|key2", val) in aurora
+        map<string, map<string, node_ref_settings>> lights;
         osg::Matrix transform;
         bool flip_YZ = false;
         string channel_file;
