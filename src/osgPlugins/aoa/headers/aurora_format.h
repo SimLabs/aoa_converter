@@ -554,14 +554,14 @@ struct node
         struct control_lightpoint_power_mul
         {
 
+            vector<std::tuple<float, float>> keys;
             std::array<arg_out_of_range_action, 2> out_of_range_actions = {};
             quoted_string               channel;
-            vector<std::tuple<float, float>> keys;
 
             REFL_INNER(control_lightpoint_power_mul)
+                REFL_ENTRY_NAMED_WITH_TAG(keys, Field__CONTROL_LIGHTPOINT_POWER_MUL_KEY, aurora_vector_field_tag(Field__CONTROL_NUMBER_KEYS))
                 REFL_ENTRY_NAMED(out_of_range_actions, Field__CONTROL_OUT_OF_RANGE)
                 REFL_ENTRY_NAMED(channel, Field__CONTROL_KEY_CHANNEL)
-                REFL_ENTRY_NAMED_WITH_TAG(keys, Field__CONTROL_LIGHTPOINT_POWER_MUL_KEY, aurora_vector_field_tag(Field__CONTROL_NUMBER_KEYS))
             REFL_END()
         };
 
@@ -642,9 +642,9 @@ struct node
     quoted_string name;
     optional<string> scope;
     unsigned flags;
-    unsigned draw_order = 0;
     optional<quoted_string> channel_filename;
     optional<def_args> args;
+    unsigned draw_order = 0;
     node_children children;
     optional<mesh_t> mesh;
     controllers_t controllers;
@@ -653,9 +653,9 @@ struct node
     REFL_INNER(node)
         REFL_ENTRY_NAMED(name, Field__NODE_NAME)
         REFL_ENTRY_NAMED(scope,  Field__NODE_SCOPE)
-        REFL_ENTRY_NAMED(draw_order, Field__DRAW_ORDER)
         REFL_ENTRY_NAMED(channel_filename, Field__CHANNEL_FILENAME)
         REFL_ENTRY_NAMED(args, Field__DEF_ARG)
+        REFL_ENTRY_NAMED(draw_order, Field__DRAW_ORDER)
         REFL_ENTRY_NAMED(children, Field__NODE_CHILDS)
         REFL_ENTRY_NAMED(controllers, Field__CONTROLLERS)
         REFL_ENTRY_NAMED(mesh, Field__MESH)

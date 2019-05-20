@@ -23,9 +23,14 @@ struct lights_buffer
     }
 
     template<class T>
-    void write(T& out) const
+    void write_omni(T& out) const
     {
         out.write(reinterpret_cast<const char*>(omni_lights.data()), omni_size());
+    }
+
+    template<class T>
+    void write_spot(T& out) const
+    {
         out.write(reinterpret_cast<const char*>(spot_lights.data()), spot_size());
     }
 
@@ -649,14 +654,24 @@ struct aoa_writer::impl
 
     void write_lights_data()
     {
+        size_t offset = current_buffer_offset();
         std::for_each(begin(nodes_), end(nodes_),
-        [this](auto& n)
+        [this, &offset](auto const& n)
         {
             if(n->pimpl_->lights_buf.omni_size())
+            {
                 n->add_omnilights_stream(current_buffer_offset(), n->pimpl_->lights_buf.omni_size());
+                n->pimpl_->lights_buf.write_omni(*this);
+                assert(offset + n->pimpl_->lights_buf.omni_size() == current_buffer_offset());
+                offset += n->pimpl_->lights_buf.omni_size();
+            }
             if(n->pimpl_->lights_buf.spot_size())
+            {
                 n->add_spotlights_stream(current_buffer_offset(), n->pimpl_->lights_buf.spot_size());
-            n->pimpl_->lights_buf.write(*this);
+                n->pimpl_->lights_buf.write_spot(*this);
+                assert(offset + n->pimpl_->lights_buf.spot_size() == current_buffer_offset());
+                offset += n->pimpl_->lights_buf.spot_size();
+            }
         });
     }
 
@@ -711,25 +726,30 @@ void aoa_writer::save_data()
     unsigned collision_buffer_size = col_index_buffer_size + col_vertex_buffer_size;
     unsigned light_buffer_size = pimpl_->lights_buffer_size();
 
+    // write data
+    assert(pimpl_->current_buffer_offset() == AOD_HEADER_SIZE);
+    get_root_node()
+        ->set_collision_stream_spec({ pimpl_->current_buffer_offset() + col_index_buffer_size, col_vertex_buffer_size }, 
+                                    { pimpl_->current_buffer_offset(), col_index_buffer_size });
+
+    pimpl_->write_index_data(collision_chunks);
+    pimpl_->write_vertex_data(collision_chunks);
+    assert(pimpl_->current_buffer_offset() == AOD_HEADER_SIZE + collision_buffer_size);
+    //
+    pimpl_->write_lights_data();
+    assert(pimpl_->current_buffer_offset() == AOD_HEADER_SIZE + light_buffer_size + collision_buffer_size);
+
     // create buffer file description
 
     refl::data_buffer& buffer_descr = pimpl_->aoa_descr_.buffer_data;
     buffer_descr.data_buffer_file = pimpl_->buffer_file_;
 
-    buffer_descr.index_file_offset_size = { AOD_HEADER_SIZE + collision_buffer_size + light_buffer_size, index_buffer_size };
-    buffer_descr.vertex_file_offset_size = { AOD_HEADER_SIZE + collision_buffer_size + light_buffer_size + index_buffer_size, vertex_buffer_size };
-
-    get_root_node()
-        ->set_collision_stream_spec({ AOD_HEADER_SIZE + col_index_buffer_size, col_vertex_buffer_size }, { AOD_HEADER_SIZE, col_index_buffer_size });
-
-    // write data
-    pimpl_->write_index_data(collision_chunks);
-    pimpl_->write_vertex_data(collision_chunks);
-
-    pimpl_->write_lights_data();
+    buffer_descr.index_file_offset_size = { pimpl_->current_buffer_offset(), index_buffer_size };
+    buffer_descr.vertex_file_offset_size = { pimpl_->current_buffer_offset() + index_buffer_size, vertex_buffer_size };
 
     pimpl_->write_index_data(mesh_chunks);
     pimpl_->write_vertex_data(mesh_chunks);
+    assert(pimpl_->current_buffer_offset() == AOD_HEADER_SIZE + light_buffer_size + collision_buffer_size + index_buffer_size + vertex_buffer_size);
     // write sizes of section to the header
 
     pimpl_->file_.seekp(8);
@@ -750,7 +770,6 @@ void aoa_writer::save_data()
             pimpl_->aoa_descr_.nodes.push_back(*(refl::node*)n->get_underlying());
         }
     );
-    pimpl_->aoa_descr_.nodes.push_back(*(refl::node*)pimpl_->root_->get_underlying());
 
     reflect(proc, pimpl_->aoa_descr_);
 
@@ -773,7 +792,7 @@ aoa_writer::node_ptr aoa_writer::get_root_node()
     if(pimpl_->root_)
         return pimpl_->root_;
 
-    pimpl_->root_ = make_shared<node>(*this);
+    pimpl_->root_ = create_node();
 
     return pimpl_->root_->set_name(fs::path(pimpl_->filename_).stem().string())
         ->add_flags(aoa_writer::GLOBAL_NODE);

@@ -38,7 +38,7 @@ struct omni_light // NOTE: this struct not used because sAodOmni and  sLightOmni
 
     // word 1
     geom::colorb color;
-    uint8_t      r_min;
+    uint8_t      r_min = 0;
     // word 2
     uint32_t     power_mul = 0;
 
@@ -71,7 +71,7 @@ struct spot_light
     float                       power;
     // word 1
     geom::colorb color;
-    uint8_t      r_min;
+    uint8_t      r_min = 0;
     // word 2
     geom::half dir_x, dir_y;
     // word 3
