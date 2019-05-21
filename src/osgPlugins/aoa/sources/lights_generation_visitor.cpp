@@ -127,13 +127,15 @@ void aurora::lights_generation_visitor::generate_lights()
 
         node->add_flags(aoa_writer::node_flags::GLOBAL_NODE);
     };
+    vector<aod::omni_light> omni_lights;
+    vector<aod::spot_light> spot_lights;
+    unsigned current_offset_omni = 0;
+    unsigned current_offset_spot = 0;
 
     for(auto const& p2 : lights_)
     {
         for(auto const& p: p2.second)
         {
-            vector<aod::omni_light> omni_lights;
-            vector<aod::spot_light> spot_lights;
 
             auto sub_channel = p2.first;
             auto light_type = p.first;
@@ -142,12 +144,12 @@ void aurora::lights_generation_visitor::generate_lights()
             auto lights_of_specific_type = lights_node->create_child(lights_node_name);
             auto lights_placement_node = lights_of_specific_type;
 
-            if(!sub_channel.empty())
-            {
-                auto placement_node_name = lights_node_name + "_content";
-                lights_placement_node = aoa_writer_.create_top_level_node()->set_name(placement_node_name);
-                lights_of_specific_type->set_control_ref_node_spec(placement_node_name, sub_channel);
-            }
+            //if(!sub_channel.empty())
+            //{
+            //    auto placement_node_name = lights_node_name + "_content";
+            //    lights_placement_node = aoa_writer_.create_top_level_node()->set_name(placement_node_name);
+            //    lights_of_specific_type->set_control_ref_node_spec(placement_node_name, sub_channel);
+            //}
 
             auto lights_geom = lights_placement_node->create_child("lights_geom");
             for(auto& geode : p.second)
@@ -193,9 +195,11 @@ void aurora::lights_generation_visitor::generate_lights()
 
                     auto& ref_node_omni_light = lights_it->second.omni_lights;
                     auto& ref_node_spot_lights = lights_it->second.spot_lights;
+                    auto omni_size = omni_lights.size();
+                    auto spot_size = spot_lights.size();
 
-                    std::copy(begin(ref_node_omni_light), end(ref_node_omni_light), back_inserter(omni_lights));
-                    std::copy(begin(ref_node_spot_lights), end(ref_node_spot_lights), back_inserter(spot_lights));
+                    std::copy(begin(ref_node_omni_light) , end(ref_node_omni_light), back_inserter(omni_lights));
+                    std::copy(begin(ref_node_spot_lights) , end(ref_node_spot_lights), back_inserter(spot_lights));
                     auto adjust_omni = [translation = get_translation(ref_node_transform)](auto& l)
                     {
                         l.position[0] += translation.x;
@@ -211,32 +215,31 @@ void aurora::lights_generation_visitor::generate_lights()
                        l.dir_y = dir.y; 
                        l.dir_z = dir.z;
                     };
-                    std::for_each(begin(omni_lights), end(omni_lights), adjust_omni);
-                    std::for_each(begin(spot_lights), end(spot_lights), adjust_spot);
+                    std::for_each(begin(omni_lights) + omni_size, end(omni_lights), adjust_omni);
+                    std::for_each(begin(spot_lights) + spot_size, end(spot_lights), adjust_spot);
                 }
             }
+            auto draw_node = lights_placement_node->create_child(lights_node_name + "_draw");
+            draw_node->set_control_light_power_spec(light_type);
 
-            if(omni_lights.size() || spot_lights.size())
+            if(omni_lights.size() != current_offset_omni)
             {
-                auto draw_node = lights_placement_node->create_child(lights_node_name + "_draw");
-                draw_node->set_control_light_power_spec(light_type);
-
-                if(omni_lights.size() != 0)
-                {
-                    lights_placement_node->set_omni_lights_buffer_data(omni_lights);
-                    draw_node->set_omni_lights(0, omni_lights.size());
-                }
-                if(spot_lights.size() != 0)
-                {
-                    lights_placement_node->set_spot_lights_buffer_data(spot_lights);
-                    draw_node->set_spot_lights(0, spot_lights.size());
-                }
-
-                add_node_args(lights_placement_node);
+                draw_node->set_omni_lights(0, omni_lights.size());
+            }
+            if(spot_lights.size() != current_offset_spot)
+            {
+                draw_node->set_spot_lights(0, spot_lights.size());
             }
 
+            add_node_args(lights_placement_node);
+
+            current_offset_omni = omni_lights.size();
+            current_offset_spot = spot_lights.size();
         }
+
     }
+    root->set_omni_lights_buffer_data(omni_lights);
+    root->set_spot_lights_buffer_data(spot_lights);
 
     add_node_args(root);
 
