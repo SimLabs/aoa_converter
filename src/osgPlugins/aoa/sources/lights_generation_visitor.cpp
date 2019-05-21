@@ -139,16 +139,21 @@ void aurora::lights_generation_visitor::generate_lights()
 
             auto sub_channel = p2.first;
             auto light_type = p.first;
+            auto node_config = config.lights.at(sub_channel).at(light_type);
+            auto const& ref_node = node_config.ref_node;
+            assert(!ref_node.empty());
+            auto lights_it = lights_config.find(ref_node);
+
             string lights_node_name = sub_channel + "_" + light_type + "_lights";
 
             auto lights_of_specific_type = lights_node->create_child(lights_node_name);
             auto lights_placement_node = lights_of_specific_type;
 
-            if(!sub_channel.empty())
+            //if(!sub_channel.empty())
             {
                 auto placement_node_name = lights_node_name + "_content";
                 lights_placement_node = aoa_writer_.create_top_level_node()->set_name(placement_node_name);
-                lights_of_specific_type->set_control_ref_node_spec(placement_node_name, sub_channel);
+                lights_of_specific_type->set_control_ref_node_spec(placement_node_name, sub_channel.empty() ? boost::none : optional<string>(sub_channel));
             }
 
             auto lights_geom = lights_placement_node->create_child("lights_geom");
@@ -174,14 +179,6 @@ void aurora::lights_generation_visitor::generate_lights()
                     osg::Matrix ref_node_transform = get_config().flip_YZ ? get_config().reverse_flip_YZ_matrix : osg::Matrix::identity();
                     ref_node_transform.postMult(transform);
 
-                    auto node_config = config.lights.at(sub_channel).at(light_type);
-                    //if(it == config.lights.end())
-                    //{
-                    //    OSG_WARN << "ref node for " << light_type << " not found";
-                    //    continue;
-                    //}
-                    auto const& ref_node = node_config.ref_node;
-                    assert(!ref_node.empty());
 
                     // add ref to node
                     lights_geom->create_child("lights_geom_" + std::to_string(ref_node_id++))
@@ -189,7 +186,6 @@ void aurora::lights_generation_visitor::generate_lights()
                         ->set_rotation(get_rotation(ref_node_transform))
                         ->set_control_ref_node_spec(ref_node);
 
-                    auto lights_it = lights_config.find(ref_node);
                     if(lights_it == lights_config.end())
                         continue;
 
