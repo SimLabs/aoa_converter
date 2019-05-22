@@ -8,12 +8,10 @@ namespace aurora
     {
         vector<aod::omni_light> omni_lights;
         vector<aod::spot_light> spot_lights;
-        unsigned                clazz;
 
         REFL_INNER(object_lights)
             REFL_ENTRY(omni_lights)
             REFL_ENTRY(spot_lights)
-            REFL_ENTRY_NAMED(clazz, "class")
         REFL_END()
     };
 

@@ -168,7 +168,7 @@ aoa_writer::node_ptr aoa_writer::node::add_control_rot_key_spec(float key, geom:
     return shared_from_this();
 }
 
-aoa_writer::node_ptr aoa_writer::node::set_control_ref_node_spec(string name, optional<string> sub_channel)
+aoa_writer::node_ptr aoa_writer::node::set_control_ref_node_spec(string name, string sub_channel)
 {
     if(!pimpl_->node_descr.controllers.node_ref)
     {
@@ -177,6 +177,18 @@ aoa_writer::node_ptr aoa_writer::node::set_control_ref_node_spec(string name, op
 
     *pimpl_->node_descr.controllers.node_ref = {name, sub_channel};
 
+    return shared_from_this();
+}
+
+aoa_writer::node_ptr aoa_writer::node::add_ref_node_arg_spec(string chan, string type, float value)
+{
+    assert(pimpl_->node_descr.controllers.node_ref);
+    if(!pimpl_->node_descr.controllers.node_ref->args)
+    {
+        pimpl_->node_descr.controllers.node_ref->args = boost::in_place();
+    }
+    
+    pimpl_->node_descr.controllers.node_ref->args->list.emplace_back(chan, *cpp_utils::string_to_enum<refl::node::arg_type>(type), value);
     return shared_from_this();
 }
 
@@ -212,12 +224,17 @@ aoa_writer::node_ptr aoa_writer::node::set_control_light_power_spec(string chann
 
 aoa_writer::node_ptr aoa_writer::node::add_float_arg_spec(string channel, float def_value)
 {
+    return add_arg_spec(channel, "FLOAT", def_value);
+}
+
+aoa_writer::node_ptr aoa_writer::node::add_arg_spec(string channel, string type, float value)
+{
     if(!pimpl_->node_descr.args)
     {
         pimpl_->node_descr.args = boost::in_place();
     }
-
-    pimpl_->node_descr.args->args.emplace_back(channel, refl::node::arg_type::FLOAT, def_value);
+    
+    pimpl_->node_descr.args->list.emplace_back(channel, *cpp_utils::string_to_enum<refl::node::arg_type>(type), value);
     return shared_from_this();
 }
 

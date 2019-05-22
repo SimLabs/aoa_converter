@@ -19,7 +19,7 @@ struct lights_generation_visitor: osg::NodeVisitor
 
 private:
     aoa_writer&                        aoa_writer_;
-    map<string, map<string, set<osg::Geode *>>> lights_;
+    map<string, map<string, set<osg::Drawable *>>> lights_;
 };
 
 }

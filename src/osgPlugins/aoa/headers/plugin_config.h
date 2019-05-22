@@ -11,17 +11,8 @@ namespace aurora
         {
             struct add_argument
             {
-                enum arg_type
-                {
-                    FLOAT
-                };
-
-                ENUM_DECL_INNER(arg_type)
-                    ENUM_DECL_ENTRY(FLOAT)
-                ENUM_DECL_END()
-
                 string   channel;
-                arg_type type;
+                string   type;
                 float    value;
 
                 REFL_INNER(add_argument)
@@ -34,11 +25,13 @@ namespace aurora
             vector<string>       find_rules;
             string               ref_node;
             vector<add_argument> add_arguments;
+            unsigned             clazz;
 
             REFL_INNER(node_ref_settings)
                 REFL_ENTRY(find_rules)
                 REFL_ENTRY(ref_node)
                 REFL_ENTRY(add_arguments)
+                REFL_ENTRY_NAMED(clazz, "class")
             REFL_END()
         };
 

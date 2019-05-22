@@ -67,13 +67,15 @@ struct aoa_writer
         node_ptr set_name(string name);
         node_ptr  set_cvbox_spec(geom::rectangle_3f const& box);
         node_ptr  set_cvsphere_spec(geom::sphere_3f const& sphere);
-        node_ptr  set_control_ref_node_spec(string name, optional<string> sub_channel = boost::none);
+        node_ptr  set_control_ref_node_spec(string name, string sub_channel = {});
+        node_ptr  add_ref_node_arg_spec(string chan, string type, float value);
         node_ptr  set_translation(geom::point_3f pos);
         node_ptr  set_rotation(geom::quaternionf rot);
         node_ptr  set_channel_file(string name);
         node_ptr  set_control_light_power_spec(string channel, vector<std::tuple<float, float>> keys = {{0.f, 0.f}, {1.f, 1.f}},
             pair<arg_out_of_range_action, arg_out_of_range_action> out_of_range = {arg_out_of_range_action::CONSTANT, arg_out_of_range_action::CONSTANT});
         node_ptr  add_float_arg_spec(string channel, float def_value);
+        node_ptr  add_arg_spec(string channel, string type, float value);
     private:
         node_ptr  add_control_pos_key_spec(float key, geom::point_3f pos);
         node_ptr  add_control_rot_key_spec(float key, geom::quaternionf rot);

@@ -34,6 +34,25 @@ geom::quaternionf get_rotation(osg::Matrix const& m)
     return { float(osg_rotate.w()), geom::point_3f(osg_rotate.x(), osg_rotate.y(), osg_rotate.z()) };
 }
 
+osg::Matrix compute_ref_node_transform(osg::Node* node)
+{
+    osg::Matrix transform;
+
+    while(node->getNumParents())
+    {
+        auto mat_transform = dynamic_cast<osg::MatrixTransform*>(node->getParent(0));
+        if(mat_transform)
+        {
+            transform.postMult(mat_transform->getMatrix());
+        }
+        node = node->getParent(0);
+    }
+
+    osg::Matrix ref_node_transform = get_config().flip_YZ ? get_config().reverse_flip_YZ_matrix : osg::Matrix::identity();
+    ref_node_transform.postMult(transform);
+    return ref_node_transform;
+}
+
 struct detect_light_node_visitor : osg::NodeVisitor
 {
     detect_light_node_visitor()
@@ -94,7 +113,10 @@ void lights_generation_visitor::apply(osg::Geode & geode)
         else
         {
             auto const& path = detect_light.get_result().value();
-            lights_[path.first][path.second].insert(&geode);
+            for(unsigned i = 0; i < geode.getNumDrawables(); ++i)
+            {
+                lights_[path.first][path.second].insert(geode.getDrawable(i));
+            }
         }
     }
 }
@@ -134,8 +156,6 @@ void aurora::lights_generation_visitor::generate_lights()
         {
             vector<aod::omni_light> omni_lights;
             vector<aod::spot_light> spot_lights;
-            unsigned current_offset_omni = 0;
-            unsigned current_offset_spot = 0;
 
             auto sub_channel = p2.first;
             auto light_type = p.first;
@@ -143,43 +163,41 @@ void aurora::lights_generation_visitor::generate_lights()
             auto const& ref_node = node_config.ref_node;
             assert(!ref_node.empty());
             auto lights_it = lights_config.find(ref_node);
-            unsigned light_class = lights_it == lights_config.end() ? 0 : lights_it->second.clazz;
 
             string lights_node_name = sub_channel + "_" + light_type + "_lights";
 
             auto lights_of_specific_type = lights_node->create_child(lights_node_name);
             auto lights_placement_node = lights_of_specific_type;
 
-            //if(!sub_channel.empty())
+            // custom case for inserting node that has its own lights
+            // this is used for PAPI lights
+            // we just insert ref node section and define args there
+            if(p.second.size() == 1 && lights_it == lights_config.end())
+            {
+                osg::Matrix ref_node_transform = compute_ref_node_transform(*p.second.begin());
+
+                // add ref to node
+                lights_placement_node
+                    ->set_translation(get_translation(ref_node_transform))
+                    ->set_rotation(get_rotation(ref_node_transform))
+                    ->set_control_ref_node_spec(ref_node, sub_channel)
+                    ->add_ref_node_arg_spec(light_type, "FLOAT", 1.);
+
+                for(auto const& a: node_config.add_arguments)
+                {
+                    lights_placement_node->add_ref_node_arg_spec(a.channel, a.type, a.value);
+                }
+            }
+            else
             {
                 auto placement_node_name = lights_node_name + "_content";
                 lights_placement_node = aoa_writer_.create_top_level_node()->set_name(placement_node_name);
-                lights_of_specific_type->set_control_ref_node_spec(placement_node_name, sub_channel.empty() ? boost::none : optional<string>(sub_channel));
-            }
+                lights_of_specific_type->set_control_ref_node_spec(placement_node_name, sub_channel);
+                auto lights_geom = lights_placement_node->create_child(lights_node_name + "_content_geom");
 
-            auto lights_geom = lights_placement_node->create_child("lights_geom");
-            for(auto& geode : p.second)
-            {
-                unsigned num_drawables = geode->getNumChildren();
-
-                for(unsigned i = 0; i < num_drawables; ++i)
+                for(auto drawable : p.second)
                 {
-                    osg::Matrix transform;
-                    osg::Node* node = geode;
-
-                    while(node->getNumParents())
-                    {
-                        auto mat_transform = dynamic_cast<osg::MatrixTransform*>(node->getParent(0));
-                        if(mat_transform)
-                        {
-                            transform.postMult(mat_transform->getMatrix());
-                        }
-                        node = node->getParent(0);
-                    }
-
-                    osg::Matrix ref_node_transform = get_config().flip_YZ ? get_config().reverse_flip_YZ_matrix : osg::Matrix::identity();
-                    ref_node_transform.postMult(transform);
-
+                    osg::Matrix ref_node_transform = compute_ref_node_transform(drawable);
 
                     // add ref to node
                     lights_geom->create_child("lights_geom_" + std::to_string(ref_node_id++))
@@ -187,34 +205,40 @@ void aurora::lights_generation_visitor::generate_lights()
                         ->set_rotation(get_rotation(ref_node_transform))
                         ->set_control_ref_node_spec(ref_node);
 
-                    if(lights_it == lights_config.end())
-                        continue;
-
-                    auto& ref_node_omni_light = lights_it->second.omni_lights;
-                    auto& ref_node_spot_lights = lights_it->second.spot_lights;
-                    auto omni_size = omni_lights.size();
-                    auto spot_size = spot_lights.size();
-
-                    std::copy(begin(ref_node_omni_light), end(ref_node_omni_light), back_inserter(omni_lights));
-                    std::copy(begin(ref_node_spot_lights), end(ref_node_spot_lights), back_inserter(spot_lights));
-                    auto adjust_omni = [translation = get_translation(ref_node_transform)](auto& l)
+                    if(lights_it != lights_config.end())
                     {
-                        l.position[0] += translation.x;
-                        l.position[1] += translation.y;
-                        l.position[2] += translation.z;
-                    };
-                    auto adjust_spot = [rotation = get_rotation(ref_node_transform), &adjust_omni](auto& l)
-                    {
-                       adjust_omni(l);
-                       geom::point_3f dir = {l.dir_x, l.dir_y, l.dir_z};
-                       dir = rotation.rotate_vector(dir);
-                       l.dir_x = dir.x;
-                       l.dir_y = dir.y; 
-                       l.dir_z = dir.z;
-                    };
-                    std::for_each(begin(omni_lights) + omni_size, end(omni_lights), adjust_omni);
-                    std::for_each(begin(spot_lights) + spot_size, end(spot_lights), adjust_spot);
+                        auto& ref_node_omni_light = lights_it->second.omni_lights;
+                        auto& ref_node_spot_lights = lights_it->second.spot_lights;
+                        auto omni_size = omni_lights.size();
+                        auto spot_size = spot_lights.size();
+
+                        std::copy(begin(ref_node_omni_light), end(ref_node_omni_light), back_inserter(omni_lights));
+                        std::copy(begin(ref_node_spot_lights), end(ref_node_spot_lights), back_inserter(spot_lights));
+                        auto adjust_omni = [translation = get_translation(ref_node_transform)](auto& l)
+                        {
+                            l.position[0] += translation.x;
+                            l.position[1] += translation.y;
+                            l.position[2] += translation.z;
+                        };
+                        auto adjust_spot = [rotation = get_rotation(ref_node_transform), &adjust_omni](auto& l)
+                        {
+                            adjust_omni(l);
+                            geom::point_3f dir = { l.dir_x, l.dir_y, l.dir_z };
+                            dir = rotation.rotate_vector(dir);
+                            l.dir_x = dir.x;
+                            l.dir_y = dir.y;
+                            l.dir_z = dir.z;
+                        };
+                        std::for_each(begin(omni_lights) + omni_size, end(omni_lights), adjust_omni);
+                        std::for_each(begin(spot_lights) + spot_size, end(spot_lights), adjust_spot);
+                    }
                 }
+            }
+
+            add_node_args(lights_placement_node);
+            for(auto& arg: node_config.add_arguments)
+            {
+                lights_placement_node->add_float_arg_spec(arg.channel, arg.value);
             }
 
             if(omni_lights.size() || spot_lights.size())
@@ -226,19 +250,13 @@ void aurora::lights_generation_visitor::generate_lights()
                 {
                     lights_placement_node->set_omni_lights_buffer_data(omni_lights);
                     draw_node->set_omni_lights(0, omni_lights.size());
-                    draw_node->set_lights_class(light_class);
+                    draw_node->set_lights_class(node_config.clazz);
                 }
                 if(spot_lights.size() != 0)
                 {
                     lights_placement_node->set_spot_lights_buffer_data(spot_lights);
                     draw_node->set_spot_lights(0, spot_lights.size());
-                    draw_node->set_lights_class(light_class);
-                }
-
-                add_node_args(lights_placement_node);
-                for(auto& arg: node_config.add_arguments)
-                {
-                    lights_placement_node->add_float_arg_spec(arg.channel, arg.value);
+                    draw_node->set_lights_class(node_config.clazz);
                 }
             }
         }

@@ -1,8 +1,31 @@
 {
   "lights" : {
-      "RUNWAY_EDGE": {
-        "find_rules": ["RUL_VP_light"],
-        "ref_node":  "ArdmLight_Elevated_White_Floodlight&Omni_Hi"
+      "AV_GLIDE_DIR01": {
+            "AV_ARDMLIGHT_PAPI": {
+            "find_rules": ["papi"],
+            "ref_node": "PAPI_left",
+              "add_arguments": [
+                  {
+                      "channel": "AV_ARDMLIGHT_PAPI_ANGLE",
+                      "type": "FLOAT",
+                      "value": 3.500000
+                  }
+              ]
+            }
+      },
+      "AV_RUNWAY01" :{
+          "AV_ARDMLIGHT_RUNWAYBORDER": {
+            "find_rules": ["RUL_VP_light"],
+            "ref_node":  "ArdmLight_Elevated_White_Floodlight&Omni_Hi",
+              "class": 1
+          }
+      },
+      "": {
+          "AV_ARDMLIGHT_TAXIWAY": {
+            "find_rules": ["taxi_"],
+            "ref_node":  "ArdmLight_Elevated_White_Floodlight&Omni_Hi",
+              "class": 2
+          }
       }
   },
   "transform": [ 1, 0, 0, 0,
@@ -10,5 +33,6 @@
                  0, 0, 1, 0,
                  0, 0, 0, 1
   ],
-  "flip_YZ": true
+  "flip_YZ": true,
+  "channel_file": "Airports.can"
 }

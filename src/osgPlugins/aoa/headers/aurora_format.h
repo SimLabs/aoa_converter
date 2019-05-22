@@ -381,6 +381,24 @@ struct node
         REFL_END()
     };
 
+    enum arg_type
+    {
+        FLOAT
+    };
+
+    ENUM_DECL_INNER(arg_type)
+        ENUM_DECL_ENTRY(FLOAT)
+    ENUM_DECL_END()
+
+    struct def_args
+    {
+        vector<std::tuple<quoted_string, arg_type, float>> list;
+
+        REFL_INNER(def_args)
+            REFL_ENTRY_NAMED(list, Field__ARG)
+        REFL_END()
+    };
+
     struct controllers_t
     {
         struct control_object_param_data
@@ -525,15 +543,17 @@ struct node
             {
                 std::get<0>(scope_name) = "GLOBAL";
                 std::get<1>(scope_name) = name;
-                sub_channel = sub_ch ? optional<quoted_string>(*sub_ch) : boost::none;
+                sub_channel = sub_ch && !sub_ch->empty() ? optional<quoted_string>(*sub_ch) : boost::none;       
             }
 
             std::tuple<string, quoted_string> scope_name;
             optional<quoted_string>           sub_channel;
+            optional<node::def_args>          args;
 
             REFL_INNER(control_node_ref)
                 REFL_ENTRY_NAMED(scope_name, Field__CONTROL_REF_NODE_NAME)
                 REFL_ENTRY_NAMED(sub_channel, Field__CONTROL_REF_ARGV_CHANNEL)
+                REFL_ENTRY_NAMED(args, Field__DEF_ARG)
             REFL_END()
         };
 
@@ -620,25 +640,6 @@ struct node
             REFL_ENTRY_NAMED(omni_offset_size, Field__OMNI)
             REFL_ENTRY_NAMED(spot_offset_size, Field__SPOT)
             REFL_ENTRY_NAMED(clazz,            Field__CLASS)
-        REFL_END()
-    };
-
-    enum arg_type
-    {
-        FLOAT
-    };
-
-    ENUM_DECL_INNER(arg_type)
-        ENUM_DECL_ENTRY(FLOAT)
-    ENUM_DECL_END()
-
-    struct def_args
-    {
-
-        vector<std::tuple<quoted_string, arg_type, float>> args;
-
-        REFL_INNER(def_args)
-            REFL_ENTRY_NAMED(args, Field__ARG)
         REFL_END()
     };
 
