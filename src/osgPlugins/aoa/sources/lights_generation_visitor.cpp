@@ -143,6 +143,7 @@ void aurora::lights_generation_visitor::generate_lights()
             auto const& ref_node = node_config.ref_node;
             assert(!ref_node.empty());
             auto lights_it = lights_config.find(ref_node);
+            unsigned light_class = lights_it == lights_config.end() ? 0 : lights_it->second.clazz;
 
             string lights_node_name = sub_channel + "_" + light_type + "_lights";
 
@@ -225,16 +226,21 @@ void aurora::lights_generation_visitor::generate_lights()
                 {
                     lights_placement_node->set_omni_lights_buffer_data(omni_lights);
                     draw_node->set_omni_lights(0, omni_lights.size());
+                    draw_node->set_lights_class(light_class);
                 }
                 if(spot_lights.size() != 0)
                 {
                     lights_placement_node->set_spot_lights_buffer_data(spot_lights);
                     draw_node->set_spot_lights(0, spot_lights.size());
+                    draw_node->set_lights_class(light_class);
                 }
 
                 add_node_args(lights_placement_node);
+                for(auto& arg: node_config.add_arguments)
+                {
+                    lights_placement_node->add_float_arg_spec(arg.channel, arg.value);
+                }
             }
-
         }
     }
 

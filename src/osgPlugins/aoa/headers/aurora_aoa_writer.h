@@ -62,6 +62,7 @@ struct aoa_writer
         void set_spot_lights_buffer_data(vector<aod::spot_light> const& data);
         node_ptr set_omni_lights(unsigned offset, unsigned size);
         node_ptr set_spot_lights(unsigned offset, unsigned size);
+        node_ptr set_lights_class(unsigned cls);
 
         node_ptr set_name(string name);
         node_ptr  set_cvbox_spec(geom::rectangle_3f const& box);

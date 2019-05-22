@@ -93,6 +93,7 @@ DECLARE_AURORA_FIELD(LIGHTS_STREAM_NUM_ELEM)
 DECLARE_AURORA_FIELD(LIGHTPOINT2)
 DECLARE_AURORA_FIELD(OMNI)
 DECLARE_AURORA_FIELD(SPOT)
+DECLARE_AURORA_FIELD(CLASS)
 
 DECLARE_AURORA_FIELD(COLLISION_BUFFER_STREAM)
 DECLARE_AURORA_FIELD(CONTROL_CVMESH2)
@@ -613,10 +614,12 @@ struct node
     {
         optional<offset_size> omni_offset_size;
         optional<offset_size> spot_offset_size;
+        unsigned              clazz = 0;
 
         REFL_INNER(lightpoint2)
             REFL_ENTRY_NAMED(omni_offset_size, Field__OMNI)
             REFL_ENTRY_NAMED(spot_offset_size, Field__SPOT)
+            REFL_ENTRY_NAMED(clazz,            Field__CLASS)
         REFL_END()
     };
 

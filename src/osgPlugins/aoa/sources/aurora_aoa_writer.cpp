@@ -398,6 +398,14 @@ aoa_writer::node_ptr aoa_writer::node::set_spot_lights(unsigned offset, unsigned
     return shared_from_this();
 }
 
+aoa_writer::node_ptr aoa_writer::node::set_lights_class(unsigned cls)
+{
+    assert(cls != 0 && pimpl_->node_descr.lightpoint2);
+
+    pimpl_->node_descr.lightpoint2->clazz = cls;
+    return shared_from_this();
+}
+
 aoa_writer::node_ptr aoa_writer::node::set_name(string name)
 {
     pimpl_->node_descr.name = name;

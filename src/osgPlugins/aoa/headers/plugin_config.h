@@ -9,12 +9,36 @@ namespace aurora
     {
         struct node_ref_settings
         {
-            vector<string> find_rules;
-            string         ref_node;
+            struct add_argument
+            {
+                enum arg_type
+                {
+                    FLOAT
+                };
+
+                ENUM_DECL_INNER(arg_type)
+                    ENUM_DECL_ENTRY(FLOAT)
+                ENUM_DECL_END()
+
+                string   channel;
+                arg_type type;
+                float    value;
+
+                REFL_INNER(add_argument)
+                    REFL_ENTRY(channel)
+                    REFL_ENTRY(type)
+                    REFL_ENTRY(value)
+                REFL_END()
+            };
+
+            vector<string>       find_rules;
+            string               ref_node;
+            vector<add_argument> add_arguments;
 
             REFL_INNER(node_ref_settings)
                 REFL_ENTRY(find_rules)
                 REFL_ENTRY(ref_node)
+                REFL_ENTRY(add_arguments)
             REFL_END()
         };
 
