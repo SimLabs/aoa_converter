@@ -5,6 +5,7 @@
 */
 
 //#include "info_io/info_io.h"
+#include "json_io.h"
 #include "serialization/dict_ops.h"
 
 #include <rapidjson/rapidjson.h>
@@ -12,6 +13,7 @@
 #include <rapidjson/writer.h>
 #include <rapidjson/prettywriter.h>
 #include <rapidjson/stringbuffer.h>
+#include "rapidjson/error/en.h"
 
 
 namespace json_io
@@ -226,24 +228,24 @@ template<typename Writer>
 void write_dict(Writer &writer, dict_t const &dict, bool camel_convert)
 {
     auto const &data = dict.data();
-    std::istringstream ss(string(data.begin(), data.size()));
+    std::istringstream inp(string(data.begin(), data.size()));
 
     if (dict.type_kind() == dict_t::TK_INTEGRAL)
     {
         int64_t i;
-        ss >> i;
+        inp >> i;
         writer.Int64(i);
     }
     else if (dict.type_kind() == dict_t::TK_FLOATING_POINT)
     {
         double d;
-        ss >> d;
+        inp >> d;
         writer.Double(d);
     }
     else if (dict.type_kind() == dict_t::TK_BOOLEAN)
     {
         bool b;
-        ss >> std::boolalpha >> b;
+        inp >> std::boolalpha >> b;
         writer.Bool(b);
     }
     else if(dict.type_kind() == dict_t::TK_NULL)
@@ -376,6 +378,13 @@ dict_t stream_to_dict(std::istream &json_stream, bool camel_convert)
         //time_counter tc;
         rapidjson::Reader reader;
         reader.Parse(sw, handler);
+        if(reader.HasParseError())
+        {
+            std::ostringstream ss;
+            ss << "json parse error at offset " << reader.GetErrorOffset() << ": ";
+            ss << rapidjson::GetParseError_En(reader.GetParseErrorCode());
+            throw parse_error(ss.str());
+        }
     }
 
     return std::move(handler.get_dict());

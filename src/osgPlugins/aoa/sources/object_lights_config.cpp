@@ -10,9 +10,8 @@ lights_config const & aurora::get_object_lights_config(optional<string> path)
     if(!instance)
     {
         Assert(path);
-        std::ifstream stream(*path);
         lights_config cfg;
-        json_io::stream_to_data(stream, cfg);
+        json_io::read_file(*path, cfg);
         instance = move(cfg);
     }
     return *instance;

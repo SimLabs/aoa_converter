@@ -12,6 +12,11 @@
 namespace json_io
 {
 
+struct parse_error: std::runtime_error
+{
+    using std::runtime_error::runtime_error;
+};
+
 dict_t stream_to_dict(std::istream &json_stream, bool camel_convert = false);
 void dict_to_stream(std::ostream &stream, dict_t const &d, bool pretty, bool camel_convert = false);
 
@@ -38,6 +43,18 @@ void string_to_data(std::string const &json, T &data, bool camel_convert = false
 {
     std::istringstream ss(json);
     stream_to_data(ss, data, camel_convert);
+}
+
+template<typename T>
+void read_file(std::string const& path, T &data, bool camel_convert = false)
+{
+    std::ifstream s(path);
+    try {
+        stream_to_data(s, data, camel_convert);
+    } catch(parse_error const& e)
+    {
+        throw parse_error(path + ": " + e.what());
+    }
 }
 
 template<typename T>

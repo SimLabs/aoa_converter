@@ -9,9 +9,8 @@ plugin_config& get_config(optional<string> path)
     if(!instance)
     {
         Assert(path);
-        std::ifstream stream(*path);
         plugin_config cfg;
-        json_io::stream_to_data(stream, cfg);
+        json_io::read_file(*path, cfg);
         instance = cfg;
     }
     return *instance;
