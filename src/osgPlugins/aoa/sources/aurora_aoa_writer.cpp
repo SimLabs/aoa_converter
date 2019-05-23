@@ -502,15 +502,35 @@ struct aoa_writer::impl
         , buffer_file_(fs::path(name).filename().replace_extension("aod").string())
         , file_(fs::path(name).replace_extension("aod").string(), std::ios_base::binary | std::ios_base::out)
     {
-        unsigned zeros[4] = {};
-        write(&c_GP_BaseFileMarker, sizeof(unsigned));
-        write(&c_GP_Version, sizeof(unsigned));
-        write(zeros, sizeof(zeros));
     }
 
     void write(const void* data, size_t size)
     {
         file_.write(reinterpret_cast<const char*>(data), size);
+    }
+
+    void write_header()
+    {
+        unsigned zeros[4] = {};
+        write(&c_GP_BaseFileMarker, sizeof(unsigned));
+        write(&c_GP_Version, sizeof(unsigned));
+        write(zeros, sizeof(zeros));    
+    }
+
+    void write_aoa()
+    {
+        std::for_each(rbegin(nodes_), rend(nodes_),
+            [this](auto& n)
+            {
+                aoa_descr_.nodes.push_back(*(refl::node*)n->get_underlying());
+            }
+        );
+
+        write_processor proc;
+        reflect(proc, aoa_descr_);
+
+        std::ofstream aoa_file(filename_);
+        aoa_file << proc.result();
     }
 
     unsigned index_buffer_size() const
@@ -527,7 +547,7 @@ struct aoa_writer::impl
         return result;
     }
 
-    size_t current_buffer_offset()
+    unsigned current_buffer_offset()
     {
         return file_.tellp();
     }
@@ -751,7 +771,10 @@ void aoa_writer::save_data()
     unsigned collision_buffer_size = col_index_buffer_size + col_vertex_buffer_size;
     unsigned light_buffer_size = pimpl_->lights_buffer_size();
 
-    // write data
+    // THE FOLLOWING CODE IS A BIT MESSY
+    // with writes to aod mixed with side effects on aoa because we have to write offsets into aod in aoa
+    pimpl_->write_header();
+    // write collision data
     assert(pimpl_->current_buffer_offset() == AOD_HEADER_SIZE);
     get_root_node()
         ->set_collision_stream_spec({ pimpl_->current_buffer_offset() + col_index_buffer_size, col_vertex_buffer_size }, 
@@ -760,7 +783,7 @@ void aoa_writer::save_data()
     pimpl_->write_index_data(collision_chunks);
     pimpl_->write_vertex_data(collision_chunks);
     assert(pimpl_->current_buffer_offset() == AOD_HEADER_SIZE + collision_buffer_size);
-    //
+    // write lights data
     pimpl_->write_lights_data();
     assert(pimpl_->current_buffer_offset() == AOD_HEADER_SIZE + light_buffer_size + collision_buffer_size);
 
@@ -772,6 +795,7 @@ void aoa_writer::save_data()
     buffer_descr.index_file_offset_size = { pimpl_->current_buffer_offset(), index_buffer_size };
     buffer_descr.vertex_file_offset_size = { pimpl_->current_buffer_offset() + index_buffer_size, vertex_buffer_size };
 
+    // write index and vertex data
     pimpl_->write_index_data(mesh_chunks);
     pimpl_->write_vertex_data(mesh_chunks);
     assert(pimpl_->current_buffer_offset() == AOD_HEADER_SIZE + light_buffer_size + collision_buffer_size + index_buffer_size + vertex_buffer_size);
@@ -784,22 +808,8 @@ void aoa_writer::save_data()
     pimpl_->write(&index_buffer_size, sizeof(unsigned));
     pimpl_->write(&vertex_buffer_size, sizeof(unsigned));
 
-    // write aoa file
-    write_processor proc;
-
-    assert(pimpl_->root_);
-
-    std::for_each(rbegin(pimpl_->nodes_), rend(pimpl_->nodes_), 
-        [this](auto& n)
-        {
-            pimpl_->aoa_descr_.nodes.push_back(*(refl::node*)n->get_underlying());
-        }
-    );
-
-    reflect(proc, pimpl_->aoa_descr_);
-
-    std::ofstream aoa_file(pimpl_->filename_);
-    aoa_file << proc.result();
+    // finally, write aoa file
+    pimpl_->write_aoa();
 }
 
 void aoa_writer::node::set_omni_lights_buffer_data(vector<aod::omni_light> const & data)
