@@ -10,21 +10,22 @@
                       "type": "FLOAT",
                       "value": 3.500000
                   }
-              ]
+              ],
+              "class": 1
             }
       },
       "AV_RUNWAY01" :{
           "AV_ARDMLIGHT_RUNWAYBORDER": {
             "find_rules": ["RUL_VP_light"],
             "ref_node":  "ArdmLight_Elevated_White_Floodlight&Omni_Hi",
-              "class": 1
+              "class": 3
           }
       },
       "": {
           "AV_ARDMLIGHT_TAXIWAY": {
             "find_rules": ["taxi_"],
             "ref_node":  "ArdmLight_Elevated_White_Floodlight&Omni_Hi",
-              "class": 2
+              "class": 4
           }
       }
   },
