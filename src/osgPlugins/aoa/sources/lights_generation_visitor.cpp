@@ -31,7 +31,8 @@ geom::point_3f get_translation(osg::Matrix const& m)
 geom::quaternionf get_rotation(osg::Matrix const& m)
 {
     osg::Quat osg_rotate = m.getRotate();
-    return { float(osg_rotate.w()), geom::point_3f(osg_rotate.x(), osg_rotate.y(), osg_rotate.z()) };
+    // conjugation is needed due to convention difference with osg
+    return !geom::quaternionf{ float(osg_rotate.w()), geom::point_3f(osg_rotate.x(), osg_rotate.y(), osg_rotate.z()) };
 }
 
 osg::Matrix compute_ref_node_transform(osg::Node* node)
@@ -220,14 +221,14 @@ void aurora::lights_generation_visitor::generate_lights()
                             l.position[1] += translation.y;
                             l.position[2] += translation.z;
                         };
-                        auto adjust_spot = [rotation = get_rotation(ref_node_transform), &adjust_omni](auto& l)
+                        auto adjust_spot = [rotation = ref_node_transform.getRotate(), &adjust_omni](auto& l)
                         {
                             adjust_omni(l);
-                            geom::point_3f dir = { l.dir_x, l.dir_y, l.dir_z };
-                            dir = rotation.rotate_vector(dir);
-                            l.dir_x = dir.x;
-                            l.dir_y = dir.y;
-                            l.dir_z = dir.z;
+                            osg::Vec3 dir = { l.dir_x, l.dir_y, l.dir_z };
+                            dir = rotation * dir;
+                            l.dir_x = dir.x();
+                            l.dir_y = dir.y();
+                            l.dir_z = dir.z();
                         };
                         std::for_each(begin(omni_lights) + omni_size, end(omni_lights), adjust_omni);
                         std::for_each(begin(spot_lights) + spot_size, end(spot_lights), adjust_spot);
