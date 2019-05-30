@@ -66,6 +66,17 @@ struct remove_hanging_transforms_visitor : osg::NodeVisitor
             traverse(t);
     }
 
+    void apply(osg::Geode& n) override
+    {
+        if(n.getNumChildren() == 0)
+        {
+            if(dynamic_cast<osg::MatrixTransform*>(n.getParent(0)))
+                nodes_to_remove_.insert(n.getParent(0));
+            else
+                nodes_to_remove_.insert(&n);
+        }
+    }
+
     void remove_hanging_transforms()
     {
         for(auto& t: nodes_to_remove_)
