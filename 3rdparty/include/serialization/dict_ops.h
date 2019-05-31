@@ -520,9 +520,16 @@ void read(dict_t const& dict, std::map<K, V, P, A>& map, bool log_on_absence = t
 
         if (!it->second.find("first") && !it->second.find("second"))
         {
-            //read map item as simple key->value json object
-            std::istringstream ss(it->first.c_str());
-            ss >> const_cast<K&>(value.first);
+            if constexpr(std::is_same_v<K, string>)
+            {
+                const_cast<K&>(value.first) = string(it->first.c_str());
+            }
+            else
+            {
+                //read map item as simple key->value json object
+                std::istringstream ss(it->first.c_str());
+                ss >> const_cast<K&>(value.first);
+            }
             read(it->second, value.second, log_on_absence);
         }
         else
