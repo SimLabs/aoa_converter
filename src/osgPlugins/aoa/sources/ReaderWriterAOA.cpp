@@ -52,38 +52,12 @@ struct remove_hanging_transforms_visitor : osg::NodeVisitor
         : osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_ALL_CHILDREN)
     {}
 
-    void apply(osg::Node& node) override
-    {
-        traverse(node);
-    }
-
     void apply(osg::Group& n) override
     {
         if(n.getNumChildren() == 0)
-        {
-            auto p = dynamic_cast<osg::MatrixTransform*>(n.getParent(0));
-            if(p && p->getNumChildren() == 1)
-                nodes_to_remove_.insert(n.getParent(0));
-        }
-        else
-        {
-            bool empty = true;
-            unsigned N = n.getNumChildren();
-            for(unsigned i = 0; i < N; ++i)
-            {
-                auto t = dynamic_cast<osg::MatrixTransform*>(n.getChild(i));
-                if(!t || t->getNumChildren() != 0)
-                {
-                    empty = false;
-                    break;
-                }
-            }
-
-            if(empty)
-                nodes_to_remove_.insert(&n);
-            else
-                traverse(n);
-        }
+            nodes_to_remove_.insert(&n);
+        else 
+            traverse(n);
     }
 
     bool remove_hanging_transforms()
