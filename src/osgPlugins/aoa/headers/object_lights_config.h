@@ -6,10 +6,12 @@ namespace aurora
 {
     struct object_lights
     {
+        string                  ref_node;
         vector<aod::omni_light> omni_lights;
         vector<aod::spot_light> spot_lights;
 
         REFL_INNER(object_lights)
+            REFL_ENTRY(ref_node)
             REFL_ENTRY(omni_lights)
             REFL_ENTRY(spot_lights)
         REFL_END()
