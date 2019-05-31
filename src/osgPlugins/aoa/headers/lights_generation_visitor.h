@@ -18,8 +18,10 @@ struct lights_generation_visitor: osg::NodeVisitor
     void generate_lights();
 
 private:
-    aoa_writer&                        aoa_writer_;
+    void remove_light_nodes();
+    aoa_writer&                                    aoa_writer_;
     map<string, map<string, set<osg::Drawable *>>> lights_;
+    set<osg::Group*>                               light_nodes_;
 };
 
 }

@@ -57,34 +57,46 @@ struct remove_hanging_transforms_visitor : osg::NodeVisitor
         traverse(node);
     }
 
-    void apply(osg::Transform& t) override
-    {
-        if(t.getNumChildren() == 0)
-        {
-            nodes_to_remove_.insert(&t);
-        } else
-            traverse(t);
-    }
-
-    void apply(osg::Geode& n) override
+    void apply(osg::Group& n) override
     {
         if(n.getNumChildren() == 0)
         {
-            if(dynamic_cast<osg::MatrixTransform*>(n.getParent(0)))
+            auto p = dynamic_cast<osg::MatrixTransform*>(n.getParent(0));
+            if(p && p->getNumChildren() == 1)
                 nodes_to_remove_.insert(n.getParent(0));
-            else
+        }
+        else
+        {
+            bool empty = true;
+            unsigned N = n.getNumChildren();
+            for(unsigned i = 0; i < N; ++i)
+            {
+                auto t = dynamic_cast<osg::MatrixTransform*>(n.getChild(i));
+                if(!t || t->getNumChildren() != 0)
+                {
+                    empty = false;
+                    break;
+                }
+            }
+
+            if(empty)
                 nodes_to_remove_.insert(&n);
+            else
+                traverse(n);
         }
     }
 
-    void remove_hanging_transforms()
+    bool remove_hanging_transforms()
     {
         for(auto& t: nodes_to_remove_)
         {
             assert(t->getNumParents() == 1);
             t->getParent(0)->removeChild(t.get());
         }
+
+        bool sts = nodes_to_remove_.size() != 0;
         nodes_to_remove_.clear();
+        return sts;
     }
 
 private:
@@ -208,8 +220,9 @@ public:
 
             // remove leaf Transform nodes because otherwise the optimizer will not be able to flatten all transforms properly
             remove_hanging_transforms_visitor remove_hanging_tv;
-            osg_root.accept(remove_hanging_tv);
-            remove_hanging_tv.remove_hanging_transforms();
+            
+            do osg_root.accept(remove_hanging_tv);
+            while(remove_hanging_tv.remove_hanging_transforms());
 
             // run the optimizer
             osgUtil::Optimizer optimizer;

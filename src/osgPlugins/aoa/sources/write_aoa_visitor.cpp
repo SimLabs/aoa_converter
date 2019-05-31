@@ -15,33 +15,6 @@ namespace aurora
 namespace
 {
 
-struct detect_light_node_visitor : osg::NodeVisitor
-{
-    detect_light_node_visitor()
-        : osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_PARENTS)
-    {}
-
-    void apply(osg::Node& node) override
-    {
-        if(node.getName().find("light") != std::string::npos)
-        {
-            should_remove_ = true;
-        }
-        else
-        {
-            traverse(node);
-        }
-    }
-
-    bool should_exclude()
-    {
-        return should_remove_;
-    }
-
-private:
-    bool should_remove_ = false;
-};
-
 string material_name_for_chunk(string name, material_info const& data)
 {
     if(!data.explicit_material.empty())
@@ -66,11 +39,6 @@ write_aoa_visitor::write_aoa_visitor(material_loader& l, aoa_writer& w)
 
 void write_aoa_visitor::apply(osg::Geode &geode)
 {
-    detect_light_node_visitor detect_light;
-    geode.accept(detect_light);
-    if(detect_light.should_exclude())
-        return;
-
     if (geode2chunks_.find(&geode) != geode2chunks_.end())
         return;
     current_geode_ = &geode;

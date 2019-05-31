@@ -116,7 +116,7 @@ struct detect_light_node_visitor : osg::NodeVisitor
         auto cur_rule = rules.cbegin();
         auto cur_node_in_path = ++root_it;
 
-        if(std::distance(cur_node_in_path, nodes_path_end) != rules.size())
+        if(static_cast<size_t>(std::distance(cur_node_in_path, nodes_path_end)) != rules.size())
             return false;
 
         for(;cur_node_in_path != nodes_path_end; 
@@ -184,6 +184,7 @@ void lights_generation_visitor::apply(osg::Geode & geode)
                 lights_[path.first][path.second].insert(geode.getDrawable(i));
             }
         }
+        light_nodes_.insert(&geode);
     }
 }
 
@@ -331,4 +332,13 @@ void aurora::lights_generation_visitor::generate_lights()
 
     add_node_args(root);
 
+    remove_light_nodes();
+}
+
+void aurora::lights_generation_visitor::remove_light_nodes()
+{
+    for(auto const n: light_nodes_)
+    {
+        n->getParent(0)->removeChild(n);
+    }
 }
