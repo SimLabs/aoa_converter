@@ -1,12 +1,27 @@
 {
-    "ArdmLight_Elevated_White_Floodlight&Omni_Hi": {
+    "taxi light": {
+        "ref_node": "ArdmLight_Elevated_White_Floodlight&Omni_Hi",
         "omni_lights": [
             {
                 "position": [0, 0, 2],
                 "power": 10001,
                 "color": {
-                    "r": 253,
+                    "r": 255,
                     "g": 254,
+                    "b": 204
+                }
+            }
+        ]
+    },
+    "approach light": {
+        "ref_node": "ArdmLight_Elevated_White_Floodlight&Omni_Hi",
+        "omni_lights": [
+            {
+                "position": [0, 0, 2],
+                "power": 10001,
+                "color": {
+                    "r": 255,
+                    "g": 255,
                     "b": 255
                 }
             }
@@ -16,15 +31,57 @@
                 "position": [0, 0, 1],
                 "power": 100000,
                 "color": {
-                    "r": 0,
-                    "g": 0,
+                    "r": 255,
+                    "g": 255,
                     "b": 255
                 },
                 "dir_x": 0,
                 "dir_y": 1,
                 "dir_z": 0,
-                "half_fov": 0.7,
+                "half_fov": 0.1,
                 "angular_power": 1
+            }
+        ]
+    },
+    "red omni": {
+        "ref_node": "ArdmLight_Elevated_White_Floodlight&Omni_Hi",
+        "omni_lights": [
+            {
+                "position": [0, 0, 1],
+                "power": 10001,
+                "color": {
+                    "r": 255,
+                    "g": 0,
+                    "b": 0
+                }
+            }
+        ]
+    },
+    "green omni": {
+        "ref_node": "ArdmLight_Elevated_White_Floodlight&Omni_Hi",
+        "omni_lights": [
+            {
+                "position": [0, 0, 1],
+                "power": 10001,
+                "color": {
+                    "r": 0,
+                    "g": 255,
+                    "b": 0
+                }
+            }
+        ]
+    },
+    "blue omni": {
+        "ref_node": "ArdmLight_Elevated_White_Floodlight&Omni_Hi",
+        "omni_lights": [
+            {
+                "position": [0, 0, 1],
+                "power": 10001,
+                "color": {
+                    "r": 0,
+                    "g": 0,
+                    "b": 255
+                }
             }
         ]
     }

@@ -2,7 +2,7 @@
   "lights" : {
       "AV_GLIDE_DIR01": {
             "AV_ARDMLIGHT_PAPI": {
-            "find_rules": ["papi"],
+            "find_rules": [["papi"]],
             "ref_node": "PAPI_left",
               "add_arguments": [
                   {
@@ -15,16 +15,53 @@
             }
       },
       "AV_RUNWAY01" :{
+          "AV_ARDMLIGHT_RUNWAYCENTER": {
+            "find_rules": [["VPP01"], ["osevie"], ["PRIBLIG_light"], ["*"]],
+            "ref_node":  "red omni",
+            "class": 3
+          },
           "AV_ARDMLIGHT_RUNWAYBORDER": {
-            "find_rules": ["RUL_VP_light"],
-            "ref_node":  "ArdmLight_Elevated_White_Floodlight&Omni_Hi",
+            "find_rules": [["VPP01"], ["krainije"], ["PRIBLIG_light"], ["*"]],
+            "ref_node":  "blue omni",
+            "class": 3
+          },
+          "AV_ARDMLIGHT_APPROACH": {
+            "find_rules": [["VPP01"], ["treshhold1", "treshhold2"], ["vhod_tres1", "vhod_tres2"], ["PRIBLIG_light"], ["*"]],
+            "ref_node":  "approach light",
+              "class": 3
+          },
+          "AV_ARDMLIGHT_THRESHOLD": {
+            "find_rules": [["VPP01"], ["treshhold1", "treshhold2"], ["treshhold1", "treshhold2"], ["PRIBLIG_light"], ["*"]],
+            "ref_node":  "green omni",
+              "class": 3
+          }
+      },
+      "AV_RUNWAY02" :{
+          "AV_ARDMLIGHT_RUNWAYCENTER": {
+            "find_rules": [["VPP02"], ["osevie"], ["PRIBLIG_light"], ["*"]],
+            "ref_node":  "red omni",
+            "class": 3
+          },
+          "AV_ARDMLIGHT_RUNWAYBORDER": {
+            "find_rules": [["VPP02"], ["krainije"], ["PRIBLIG_light"], ["*"]],
+            "ref_node":  "blue omni",
+            "class": 3
+          },
+          "AV_ARDMLIGHT_APPROACH": {
+            "find_rules": [["VPP02"], ["treshhold1", "treshhold2"], ["vhod_tres1", "vhod_tres2"], ["PRIBLIG_light"], ["*"]],
+            "ref_node":  "approach light",
+              "class": 3
+          },
+          "AV_ARDMLIGHT_THRESHOLD": {
+            "find_rules": [["VPP02"], ["treshhold1", "treshhold2"], ["treshhold1", "treshhold2"], ["PRIBLIG_light"], ["*"]],
+            "ref_node":  "green omni",
               "class": 3
           }
       },
       "": {
           "AV_ARDMLIGHT_TAXIWAY": {
-            "find_rules": ["taxi_"],
-            "ref_node":  "ArdmLight_Elevated_White_Floodlight&Omni_Hi",
+            "find_rules": [["TAXI_light"], ["geo1"], ["*"]],
+            "ref_node":  "taxi light",
               "class": 4
           }
       }

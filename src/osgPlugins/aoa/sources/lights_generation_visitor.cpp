@@ -60,6 +60,84 @@ struct detect_light_node_visitor : osg::NodeVisitor
         : osg::NodeVisitor(osg::NodeVisitor::TRAVERSE_PARENTS)
     {}
 
+    bool is_root_node(const osg::Node* n)
+    {
+        return n->getName().find(".fbx") == n->getName().length() - 4;
+    }
+
+    bool node_matches(vector<vector<string>> const& rules)
+    {
+        vector<osg::Node*> nodes_path = getNodePath();
+        auto last_path_node = nodes_path.end()-1;
+
+        // remove transform before geode with the same name
+        if(dynamic_cast<osg::Geode*>(*last_path_node) && last_path_node != nodes_path.begin())
+        {
+            auto prev_last = (last_path_node - 1);
+            if(dynamic_cast<osg::MatrixTransform*>(*prev_last) && (*prev_last)->getName() == (*last_path_node)->getName())
+                nodes_path.erase(prev_last);
+        }
+
+        // remove transforms if there is a neighbour node (either parent or child) with the same name
+        //auto it = nodes_path.begin();
+        //while(it != nodes_path.end())
+        //{
+        //    auto next_it = it != nodes_path.end() ? it+1 : nodes_path.end();
+        //    auto prev_it = it != nodes_path.begin() ? it-1 : nodes_path.end();
+        //    bool need_erase = false;
+        //    auto t = dynamic_cast<osg::MatrixTransform*>(*it);
+        //    if(!t)
+        //        need_erase = false;
+        //    else if(prev_it != nodes_path.end() && (*prev_it)->getName() == t->getName())
+        //    {
+        //        Assert(!dynamic_cast<osg::MatrixTransform*>(*prev_it));
+        //        need_erase = true;
+        //    }
+        //    else if(next_it != nodes_path.end() && (*next_it)->getName() == t->getName())
+        //    {
+        //        Assert(!dynamic_cast<osg::MatrixTransform*>(*next_it));
+        //        need_erase = true;
+        //    }
+
+        //    if(need_erase)
+        //        it = nodes_path.erase(it);
+        //    else
+        //        ++it;
+        //}
+
+        auto nodes_path_end = nodes_path.cend();
+        auto root_it = std::find_if(nodes_path.cbegin(), nodes_path_end, [this](auto const n){  return is_root_node(n); });
+        if(root_it == nodes_path_end)
+        {
+            OSG_FATAL << "AOA plugin: root node was not found" << std::endl;
+            return false;
+        }
+
+        auto cur_rule = rules.cbegin();
+        auto cur_node_in_path = ++root_it;
+
+        if(std::distance(cur_node_in_path, nodes_path_end) != rules.size())
+            return false;
+
+        for(;cur_node_in_path != nodes_path_end; 
+            ++cur_node_in_path, ++cur_rule)
+        {
+            bool matches = false;
+            for(auto rule: *cur_rule)
+            {
+                if(rule == "*" || (*cur_node_in_path)->getName() == rule)
+                {
+                    matches = true;
+                    break;
+                }
+            }
+            if(!matches)
+                return false;
+        }
+
+        return true;
+    }
+
     void apply(osg::Node& node) override
     {
         auto const& config = get_config();
@@ -67,18 +145,11 @@ struct detect_light_node_visitor : osg::NodeVisitor
         {
             for(auto p2: p.second)
             {
-                for(auto name : p2.second.find_rules)
+                if(node_matches(p2.second.find_rules))
                 {
-                    if(find_ignore_case(node.getName(), name))
-                    {
-                        light_type_ = pair<string, string>{p.first, p2.first};
-                    }
+                    light_type_ = pair<string, string>{ p.first, p2.first };
                 }
             }
-        }
-        if(light_type_ || node.getName().find("light") != std::string::npos)
-        {
-            should_remove_ = true;
         }
         if(!light_type_)
         {
@@ -91,13 +162,7 @@ struct detect_light_node_visitor : osg::NodeVisitor
         return light_type_;
     }
 
-    bool should_exclude()
-    {
-        return should_remove_;
-    }
-
 private:
-    bool should_remove_ = false;
     optional<pair<string, string>> light_type_;
 };
 
@@ -195,6 +260,7 @@ void aurora::lights_generation_visitor::generate_lights()
                 lights_placement_node = aoa_writer_.create_top_level_node()->set_name(placement_node_name);
                 lights_of_specific_type->set_control_ref_node_spec(placement_node_name, sub_channel);
                 auto lights_geom = lights_placement_node->create_child(lights_node_name + "_content_geom");
+                string const& ref_node_name = lights_it != lights_config.end() ? lights_it->second.ref_node : ref_node;
 
                 for(auto drawable : p.second)
                 {
@@ -204,7 +270,7 @@ void aurora::lights_generation_visitor::generate_lights()
                     lights_geom->create_child("lights_geom_" + std::to_string(ref_node_id++))
                         ->set_translation(get_translation(ref_node_transform))
                         ->set_rotation(get_rotation(ref_node_transform))
-                        ->set_control_ref_node_spec(ref_node);
+                        ->set_control_ref_node_spec(ref_node_name);
 
                     if(lights_it != lights_config.end())
                     {

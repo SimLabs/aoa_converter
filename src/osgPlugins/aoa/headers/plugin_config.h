@@ -22,7 +22,7 @@ namespace aurora
                 REFL_END()
             };
 
-            vector<string>       find_rules;
+            vector<vector<string>>       find_rules;
             string               ref_node;
             vector<add_argument> add_arguments;
             unsigned             clazz;
