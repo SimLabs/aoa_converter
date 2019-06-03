@@ -200,7 +200,7 @@ public:
 
             // run the optimizer
             osgUtil::Optimizer optimizer;
-            optimizer.optimize(&osg_root, osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS);
+            optimizer.optimize(&osg_root, osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS | (config.index_mesh ? osgUtil::Optimizer::INDEX_MESH : 0));
 
             OSG_INFO << "Writing node to AOA file " << file_name << std::endl;
 

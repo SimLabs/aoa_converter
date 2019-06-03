@@ -72,5 +72,6 @@
                  0, 0, 0, 1
   ],
   "flip_YZ": true,
+  "index_mesh": true,
   "channel_file": "Airports.can"
 }
