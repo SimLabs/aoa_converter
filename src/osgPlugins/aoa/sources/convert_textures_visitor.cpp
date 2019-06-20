@@ -40,9 +40,12 @@ void convert_textures_visitor::write(const std::string & dir)
         osg::ref_ptr<osg::Image> image = texture2D ? texture2D->getImage() : (texture3D ? texture3D->getImage() : 0);
         if(image.valid())
         {
-            std::string name = fs::path(image->getFileName()).replace_extension(extension_).string();
+            auto image_path = fs::path(image->getFileName());
+            if(image_path.is_absolute())
+                image_path = image_path.filename();
+            std::string name = image_path.replace_extension(extension_).string();
             image->setFileName(name);
-            std::string path = dir.empty() ? name : (fs::path(dir) / name).string();
+            std::string path = (fs::path(dir) / name).string();
             if(fs::path(path).has_parent_path())
                 fs::create_directories(fs::path(path).parent_path());
             osgDB::writeImageFile(*image, path);
