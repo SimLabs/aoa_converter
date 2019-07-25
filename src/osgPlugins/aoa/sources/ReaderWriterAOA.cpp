@@ -24,6 +24,7 @@
 #include "material_loader.h"
 #include "debug_utils.h"
 #include "plugin_config.h"
+#include "aurora_aoa_reader.h"
 
 using namespace aurora;
 
@@ -101,9 +102,10 @@ public:
 
     const char* className() const override { return "Aurora engine AOA Writer"; }
 
-    ReadResult readNode(const std::string& /*file_name*/, const Options* /*options*/) const override
+    ReadResult readNode(const std::string& file_name, const Options* /*options*/) const override
     {
-        return ReadResult();
+        auto aoa = aurora::read_aoa(file_name);
+        return ReadResult(ReadResult::FILE_LOADED);
     }
 
     ReadResult readNode(std::istream& /*fin*/, const Options* /*options*/) const override

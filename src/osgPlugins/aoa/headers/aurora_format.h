@@ -685,7 +685,7 @@ struct material_list
     {
         struct material_group
         {
-            material_group(unsigned texture_unit, string texture_file)
+            material_group(unsigned texture_unit=0, string texture_file="")
                 : link(texture_link(texture_unit))
                 , texture(texture_file)
             {
