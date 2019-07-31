@@ -383,11 +383,13 @@ struct node
 
     enum arg_type
     {
-        FLOAT
+        FLOAT,
+        INTEGER
     };
 
     ENUM_DECL_INNER(arg_type)
         ENUM_DECL_ENTRY(FLOAT)
+        ENUM_DECL_ENTRY(INTEGER)
     ENUM_DECL_END()
 
     struct def_args
@@ -470,7 +472,7 @@ struct node
 
             struct cv_box
             {
-                cv_box(geom::rectangle_3f const& r = {})
+                cv_box(geom::rectangle_3f const& r = geom::rectangle_3f{geom::point_3f{}})
                 {
                     min = { r.lo().x, r.lo().y, r.lo().z };
                     max = { r.hi().x, r.hi().y, r.hi().z };
@@ -513,7 +515,7 @@ struct node
             vector<cv_mesh> meshes;
 
             REFL_INNER(control_collision_volume)
-                REFL_ENTRY_NAMED_WITH_TAG(meshes, Field__CONTROL_CVMESH2, aurora_vector_field_tag(Field__NUM_COLLISION_VOLUME))
+                REFL_ENTRY_NAMED_WITH_TAG(meshes, Field__CONTROL_CVMESH2, aurora_vector_field_tag(/*Field__NUM_COLLISION_VOLUME*/))
             REFL_END()
         };
 

@@ -24,7 +24,9 @@
 #include "material_loader.h"
 #include "debug_utils.h"
 #include "plugin_config.h"
-#include "aurora_aoa_reader.h"
+#include "aoa_to_osg.h"
+
+#include <filesystem>
 
 using namespace aurora;
 
@@ -104,8 +106,10 @@ public:
 
     ReadResult readNode(const std::string& file_name, const Options* /*options*/) const override
     {
-        auto aoa = aurora::read_aoa(file_name);
-        return ReadResult(ReadResult::FILE_LOADED);
+        if(!std::filesystem::exists(file_name))
+            return ReadResult(ReadResult::FILE_NOT_FOUND);
+        else
+            return ReadResult(aurora::aoa_to_osg(file_name));
     }
 
     ReadResult readNode(std::istream& /*fin*/, const Options* /*options*/) const override

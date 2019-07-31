@@ -66,7 +66,13 @@ struct write_processor
     template<class Type>
     void operator()(Type const& value, const char* key, std::enable_if_t<is_leaf_type_v<Type>>* = nullptr)
     {
-        out_ << indent_ << key << " " << value << std::endl;
+        std::ostringstream ss;
+        ss << value;
+        auto value_str = ss.str();
+        if(value_str.size())
+            out_ << indent_ << key << " " << value_str << std::endl;
+        else
+            out_ << indent_ << key << std::endl;
     }
 
     template<class Type>

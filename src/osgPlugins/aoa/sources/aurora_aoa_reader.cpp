@@ -16,12 +16,32 @@ dict_t aoa_to_dict(std::string const& path)
 
     std::stack<dict_t*> dicts({ &result });
 
-    while(true)
-    {
-        char c = file.get();
-        if(c == std::string::traits_type::eof())
-            break;
+    std::string file_content;
 
+    for(std::string line; std::getline(file, line); )
+    {
+        // strip comments
+        auto comment_pos = line.find("//");
+        if(comment_pos != std::string::npos)
+            line = line.substr(0, comment_pos);
+
+        // strip trailing whitespaces
+        {
+            auto it = line.rbegin();
+            while(it != line.rend() && std::isspace(*it))
+                it++;
+
+            line.erase(it.base(), line.end());
+        }
+
+        file_content += line;
+
+        if(!file.eof())
+            file_content += "\n";
+    }
+
+    for(char c: file_content)
+    {
         assert((!reading_key && !reading_value) || reading_key != reading_value);
 
         switch(c)

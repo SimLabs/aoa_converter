@@ -62,7 +62,8 @@ struct read_processor
 
     void operator()(refl::quoted_string & value, dict_t const& entry)
     {
-        std::istringstream in_(std::string(entry.data().begin(), entry.data().end()));
+        assert(distance(entry.data().begin(), entry.data().end()) >= 2);
+        std::istringstream in_(std::string(std::next(entry.data().begin()), std::prev(entry.data().end())));
         std::string v;
         in_ >> v;
         value = v;
