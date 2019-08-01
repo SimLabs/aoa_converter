@@ -163,7 +163,7 @@ struct node_context
                 // vertex buffer offset + stream offset + attribute offset
                 std::advance(b, data_buffer_description_.vertex_file_offset_size.offset + s.vertex_offset_size.offset);
                 std::advance(e, data_buffer_description_.vertex_file_offset_size.offset + s.vertex_offset_size.offset + s.vertex_offset_size.size);
-                stream_attr_arrays_cache_.emplace(pair{stream_num, i}, attribute_array_to_osg(b, e, a.type, a.size, offset, stride));
+                stream_attr_arrays_cache_.emplace(pair{stream_num, a.id}, attribute_array_to_osg(b, e, a.type, a.size, offset, stride));
             } 
             stream_num++;
         }
@@ -197,7 +197,7 @@ osg::ref_ptr<osg::Node> osg_geometry_from_aoa_mesh(refl::node::mesh_t mesh, node
         // 1 - normal
         if(auto a = context.get_stream_vertex_attr_array(mesh.vao_ref.geom_stream_id, 1))
         {
-            g->setNormalArray(a);
+            g->setNormalArray(a, osg::Array::BIND_PER_VERTEX);
         }
         // 4 - uv
         if(auto a = context.get_stream_vertex_attr_array(mesh.vao_ref.geom_stream_id, 4))
