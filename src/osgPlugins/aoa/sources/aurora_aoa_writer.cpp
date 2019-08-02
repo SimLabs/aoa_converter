@@ -288,13 +288,15 @@ aoa_writer::node_ptr aoa_writer::node::add_mesh_spec(geom::rectangle_3f bbox, un
 
     refl::node::mesh_t::mesh_face mesh_geom;
 
-    mesh_geom.params.id = 0;
-    mesh_geom.params.offset = offset;
-    mesh_geom.params.count = count;
-    mesh_geom.params.base_vertex = base_vertex;
-    mesh_geom.params.mat = material;
-    mesh_geom.params.shadow_mat = shadow_material;
-    mesh_geom.params.num_vertices = num_vertices;
+    mesh_geom.with_shadow_mat = boost::in_place();
+
+    mesh_geom.with_shadow_mat->id = 0;
+    mesh_geom.with_shadow_mat->offset = offset;
+    mesh_geom.with_shadow_mat->count = count;
+    mesh_geom.with_shadow_mat->base_vertex = base_vertex;
+    mesh_geom.with_shadow_mat->mat = material;
+    mesh_geom.with_shadow_mat->shadow_mat = shadow_material;
+    mesh_geom.with_shadow_mat->num_vertices = num_vertices;
 
     mesh.vao_ref.geom_stream_id = vao_ref.first;
     mesh.vao_ref.vao_id = vao_ref.second;

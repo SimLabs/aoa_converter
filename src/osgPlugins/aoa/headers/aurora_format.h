@@ -323,10 +323,10 @@ struct node
                 REFL_END()
             };
             
-            mesh_face_offset_count_base_mat params;
+            optional<mesh_face_offset_count_base_mat> with_shadow_mat;
 
             REFL_INNER(mesh_face)
-                REFL_ENTRY_NAMED(params, Field__MESH_FACE_OFFSET_COUNT_MTLNAME3)
+                REFL_ENTRY_NAMED(with_shadow_mat, Field__MESH_FACE_OFFSET_COUNT_MTLNAME3)
             REFL_END()
         };
 

@@ -77,21 +77,38 @@ struct node_context
 
     osg::ref_ptr<osg::DrawElements> get_mesh_draw_elements(unsigned vao, unsigned stream_id, unsigned offset, unsigned count, unsigned base_vertex) const
     {
+        // Vertex array (described by VAO_BUFFER section in aoa) can contain multiple streams.
+        // As we are extracting each individual mesh chunks
+        // we have to adjust the base vertex so that the indices are counting from the start of the stream
+        // not from the start of the whole vertex array.
+        unsigned previous_streams_offset = 0;
+
+        for(unsigned i = 0; i < stream_id; ++i)
+        {
+            auto const& stream = root_node_.controllers.object_param_controller->buffer.geometry_streams.at(i);
+            auto [buffer_id, buffer_format] = get_buffer_format_by_vertex_offset(stream.vertex_offset_size.offset);
+            if(buffer_id == vao)
+                previous_streams_offset += stream.vertex_offset_size.size;
+        }
+
         auto b = data_buffer_.begin();
         auto e = data_buffer_.begin();
 
         auto stream = shared_streams_.geometry_streams.at(stream_id);
         auto buf_chunk = data_buffer_description_.vaos.at(vao);
+        auto [not_used, stride] = get_attribute_array_offset_stride(buf_chunk, 0);
 
         auto [buffer_id, buffer_format] = get_buffer_format_by_vertex_offset(stream.vertex_offset_size.offset);
         assert(vao == buffer_id);
 
-        std::advance(b, data_buffer_description_.index_file_offset_size.offset + stream.index_offset_size.offset);
-        std::advance(e, data_buffer_description_.index_file_offset_size.offset + stream.index_offset_size.offset + stream.index_offset_size.size);
-        return elements_array_to_osg(b, e, buf_chunk.vertex_format_offset.format, offset, count, base_vertex);
+        std::advance(b, data_buffer_description_.index_file_offset_size.offset);
+        std::advance(e, data_buffer_description_.index_file_offset_size.offset + stream.index_offset_size.size);
+        auto result = elements_array_to_osg(b, e, buf_chunk.vertex_format_offset.format, offset, count, base_vertex - previous_streams_offset / stride);
+        assert(result->getNumIndices() > 0);
+        return result;
     }
 
-    pair<unsigned, unsigned> get_attribute_array_offset_stride(refl::data_buffer::vao_buffer const& buffer_format, unsigned num)
+    pair<unsigned, unsigned> get_attribute_array_offset_stride(refl::data_buffer::vao_buffer const& buffer_format, unsigned num) const
     {
         pair<unsigned, unsigned> result{0, 0};
         unsigned i = 0;
@@ -151,9 +168,9 @@ struct node_context
         shared_streams_ = root_node.controllers.object_param_controller->buffer;
 
         unsigned stream_num = 0;
-        for(auto s: root_node.controllers.object_param_controller->buffer.geometry_streams)
+        for(auto stream: root_node.controllers.object_param_controller->buffer.geometry_streams)
         {
-            auto [buffer_id, buffer_format] = get_buffer_format_by_vertex_offset(s.vertex_offset_size.offset);
+            auto [buffer_id, buffer_format] = get_buffer_format_by_vertex_offset(stream.vertex_offset_size.offset);
             for(unsigned i = 0; i < buffer_format.format.attributes.size(); ++i)
             {
                 auto const a = buffer_format.format.attributes[i];
@@ -161,8 +178,8 @@ struct node_context
                 auto b = data_buffer_.begin();
                 auto e = b;
                 // vertex buffer offset + stream offset + attribute offset
-                std::advance(b, data_buffer_description_.vertex_file_offset_size.offset + s.vertex_offset_size.offset);
-                std::advance(e, data_buffer_description_.vertex_file_offset_size.offset + s.vertex_offset_size.offset + s.vertex_offset_size.size);
+                std::advance(b, data_buffer_description_.vertex_file_offset_size.offset + stream.vertex_offset_size.offset);
+                std::advance(e, data_buffer_description_.vertex_file_offset_size.offset + stream.vertex_offset_size.offset + stream.vertex_offset_size.size);
                 stream_attr_arrays_cache_.emplace(pair{stream_num, a.id}, attribute_array_to_osg(b, e, a.type, a.size, offset, stride));
             } 
             stream_num++;
@@ -186,7 +203,7 @@ osg::ref_ptr<osg::Node> osg_geometry_from_aoa_mesh(refl::node::mesh_t mesh, node
 {
     osg::ref_ptr<osg::Group> result = new osg::Group();
 
-    for(auto m: mesh.face_array)
+    for(auto mesh_params: mesh.face_array)
     {
         osg::ref_ptr<osg::Geometry> g = new osg::Geometry();
         // 0 - position
@@ -205,7 +222,16 @@ osg::ref_ptr<osg::Node> osg_geometry_from_aoa_mesh(refl::node::mesh_t mesh, node
             g->setTexCoordArray(0, a);
         }
 
-        g->addPrimitiveSet(context.get_mesh_draw_elements(mesh.vao_ref.vao_id, mesh.vao_ref.geom_stream_id, m.params.offset, 3 * m.params.count, m.params.base_vertex));
+        if(mesh_params.with_shadow_mat)
+        {
+            g->addPrimitiveSet(context.get_mesh_draw_elements(
+                mesh.vao_ref.vao_id, 
+                mesh.vao_ref.geom_stream_id, 
+                mesh_params.with_shadow_mat->offset,
+                3 * mesh_params.with_shadow_mat->count,
+                mesh_params.with_shadow_mat->base_vertex
+            ));
+        }
 
         result->addChild(g);
     }
