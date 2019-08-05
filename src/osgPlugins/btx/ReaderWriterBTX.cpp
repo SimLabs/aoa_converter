@@ -1361,64 +1361,7 @@ public:
 
     virtual ReadResult readImage(std::istream& fin, const Options* options) const
     {
-        bool dds_flip(false);
-        bool dds_dxt1_rgba(false);
-        bool dds_dxt1_rgb(false);
-        bool dds_dxt1_detect_rgba(false);
-        if (options)
-        {
-            std::istringstream iss(options->getOptionString());
-            std::string opt;
-            while (iss >> opt)
-            {
-                if (opt == "dds_flip") dds_flip = true;
-                if (opt == "dds_dxt1_rgba") dds_dxt1_rgba = true;
-                if (opt == "dds_dxt1_rgb") dds_dxt1_rgb = true;
-                if (opt == "dds_dxt1_detect_rgba") dds_dxt1_detect_rgba = true;
-            }
-        }
-        osg::Image* osgImage = ReadDDSFile(fin, dds_flip);
-        if (osgImage==NULL) return ReadResult::FILE_NOT_HANDLED;
-
-        if (osgImage->getPixelFormat()==GL_COMPRESSED_RGB_S3TC_DXT1_EXT ||
-            osgImage->getPixelFormat()==GL_COMPRESSED_RGBA_S3TC_DXT1_EXT)
-        {
-            if (dds_dxt1_rgba)
-            {
-                osgImage->setPixelFormat(GL_COMPRESSED_RGBA_S3TC_DXT1_EXT);
-                osgImage->setInternalTextureFormat(GL_COMPRESSED_RGBA_S3TC_DXT1_EXT);
-            }
-            else if (dds_dxt1_rgb)
-            {
-                osgImage->setPixelFormat(GL_COMPRESSED_RGB_S3TC_DXT1_EXT);
-                osgImage->setInternalTextureFormat(GL_COMPRESSED_RGB_S3TC_DXT1_EXT);
-            }
-            else if (dds_dxt1_detect_rgba)
-            {
-                // check to see if DXT1c (RGB_S3TC_DXT1) format image might actually be
-                // a DXT1a format image
-
-                // temporarily set pixel format to GL_COMPRESSED_RGBA_S3TC_DXT1_EXT so
-                // that the isImageTranslucent() method assumes that RGBA is present and then
-                // checks the alpha values to see if they are all 1.0.
-                osgImage->setPixelFormat(GL_COMPRESSED_RGBA_S3TC_DXT1_EXT);
-                osgImage->setInternalTextureFormat(GL_COMPRESSED_RGBA_S3TC_DXT1_EXT);
-                if (!osgImage->isImageTranslucent())
-                {
-                    // image contains alpha's that are 1.0, so treat is as RGB
-                    OSG_INFO<<"Image with PixelFormat==GL_COMPRESSED_RGB_S3TC_DXT1_EXT is opaque."<<std::endl;
-                    osgImage->setPixelFormat(GL_COMPRESSED_RGB_S3TC_DXT1_EXT);
-                    osgImage->setInternalTextureFormat(GL_COMPRESSED_RGB_S3TC_DXT1_EXT);
-                }
-                else
-                {
-                    // image contains alpha's that are non 1.0, so treat is as RGBA
-                    OSG_INFO<<"Image with PixelFormat==GL_COMPRESSED_RGB_S3TC_DXT1_EXT has transparency, setting format to GL_COMPRESSED_RGBA_S3TC_DXT1_EXT."<<std::endl;
-                }
-            }
-        }
-
-        return osgImage;
+        return ReadResult(ReadResult::NOT_IMPLEMENTED);
     }
 
     virtual WriteResult writeObject(const osg::Object& object,const std::string& file, const osgDB::ReaderWriter::Options* options) const
@@ -1457,13 +1400,7 @@ public:
 
     virtual WriteResult writeImage(const osg::Image& image,std::ostream& fout,const Options* options) const
     {
-        bool noAutoFlipDDSWrite = options && options->getOptionString().find("ddsNoAutoFlipWrite")!=std::string::npos;
-        bool success = WriteDDSFile(&image, fout, !noAutoFlipDDSWrite);
-
-        if(success)
-            return WriteResult::FILE_SAVED;
-        else
-            return WriteResult::ERROR_IN_WRITING_FILE;
+        return WriteResult(WriteResult::NOT_IMPLEMENTED);
     }
 };
 
