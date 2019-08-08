@@ -109,7 +109,17 @@ public:
         if(!std::filesystem::exists(file_name))
             return ReadResult(ReadResult::FILE_NOT_FOUND);
         else
-            return ReadResult(aurora::aoa_to_osg(file_name));
+        {
+            auto osg_root = aurora::aoa_to_osg(file_name);
+            if(!osg_root) return osg_root;
+
+            // convert all textures to some format
+            //aurora::convert_textures_visitor texture_visitor("dds");
+            //osg_root->accept(texture_visitor);
+            //texture_visitor.write(osgDB::getFilePath(file_name));
+
+            return osg_root;
+        }
     }
 
     ReadResult readNode(std::istream& /*fin*/, const Options* /*options*/) const override
@@ -184,9 +194,9 @@ public:
             osg_root.accept(fix_mats_vis);
 
             // convert all textures to some format
-            aurora::convert_textures_visitor texture_visitor("dds");
-            osg_root.accept(texture_visitor);
-            texture_visitor.write(osgDB::getFilePath(file_name));
+            //aurora::convert_textures_visitor texture_visitor("dds");
+            //osg_root.accept(texture_visitor);
+            //texture_visitor.write(osgDB::getFilePath(file_name));
 
             aurora::aoa_writer file_writer(file_name);
             lights_generation_visitor generate_lights_v(file_writer);

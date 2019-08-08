@@ -29,6 +29,7 @@
 #include <iostream>
 
 #include "OrientationConverter.h"
+#include "ConvertTexturesVisitor.h"
 
 typedef std::vector<std::string> FileNameList;
 
@@ -611,6 +612,9 @@ int main( int argc, char **argv )
     OrientationConverter oc;
     bool do_convert = false;
 
+    std::string convertTexturesExtension;
+    arguments.read("--convert-textures", convertTexturesExtension);
+
     if (arguments.read("--use-world-frame"))
     {
         oc.useWorldFrame(true);
@@ -852,6 +856,21 @@ int main( int argc, char **argv )
             osg::notify( osg::ALWAYS ) << " smoothing: " << smooth << std::endl;
             simple.setSampleRatio( simplifyPercent );
             root->accept( simple );
+        }
+
+        // convert all textures to some format
+        if(!convertTexturesExtension.empty())
+        {
+            if(osgDB::Registry::instance()->getReaderWriterForExtension(convertTexturesExtension))
+            {
+                ConvertTexturesVisitor texture_visitor("dds");
+                root->accept(texture_visitor);
+                texture_visitor.write(osgDB::getFilePath(fileNameOut));
+            }
+            else
+            {
+                osg::notify(osg::WARN) << "Could not convert textures to " << convertTexturesExtension << " format. No plugin found that can handle it." << std::endl;
+            }
         }
 
         osgDB::ReaderWriter::WriteResult result = osgDB::Registry::instance()->writeNode(*root,fileNameOut,osgDB::Registry::instance()->getOptions());

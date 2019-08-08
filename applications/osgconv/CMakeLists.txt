@@ -1,8 +1,10 @@
 SET(TARGET_SRC
-    OrientationConverter.cpp 
+    ConvertTexturesVisitor.cpp
+    OrientationConverter.cpp
     osgconv.cpp
 )
 SET(TARGET_H
+    ConvertTexturesVisitor.h
     OrientationConverter.h
 )
 
