@@ -35,6 +35,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "btx_to_dds.h"
+
 // Macro similar to what's in FLT/TRP plugins (except it uses wide char under Windows if OSG_USE_UTF8_FILENAME)
 #if defined(_WIN32)
     #include <windows.h>
@@ -1361,7 +1363,12 @@ public:
 
     virtual ReadResult readImage(std::istream& fin, const Options* options) const
     {
-        return ReadResult(ReadResult::NOT_IMPLEMENTED);
+        std::stringstream out(std::ios_base::binary | std::ios_base::in | std::ios_base::out);
+        auto sts = btx_to_dds(fin, out);
+        if(!sts)
+            return ReadResult::ERROR_IN_READING_FILE;
+
+        return osgDB::Registry::instance()->getReaderWriterForExtension("dds")->readImage(out, options);
     }
 
     virtual WriteResult writeObject(const osg::Object& object,const std::string& file, const osgDB::ReaderWriter::Options* options) const

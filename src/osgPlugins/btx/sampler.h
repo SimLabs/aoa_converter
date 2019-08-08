@@ -1,12 +1,139 @@
-#ifndef _SAMPLER_H
-#define _SAMPLER_H
-
 #pragma once
+
+//#include <cstddef>
+//#include "glext.h"
+#include <osg/Texture>
+
+#define GL_MIRRORED_REPEAT                0x8370
+
+#define GL_MIRROR_CLAMP_ATI               0x8742
+#define GL_MIRROR_CLAMP_TO_EDGE_ATI       0x8743
+
+#define GL_TEXTURE_1D_ARRAY               0x8C18
+#define GL_TEXTURE_2D_ARRAY               0x8C1A
+
+#define GL_TEXTURE_2D_MULTISAMPLE_ARRAY   0x9102
+#define GL_TEXTURE_CUBE_MAP_ARRAY         0x9009
+
+#define GL_RENDERBUFFER                   0x8D41
+
+#define GL_RED_INTEGER                    0x8D94
+#define GL_RGB_INTEGER                    0x8D98
+#define GL_RGBA_INTEGER                   0x8D99
+
+#define GL_RGBA32UI                       0x8D70
+#define GL_RGB32UI                        0x8D71
+#define GL_RGBA16UI                       0x8D76
+#define GL_RGB16UI                        0x8D77
+#define GL_RGBA8UI                        0x8D7C
+#define GL_RGB8UI                         0x8D7D
+#define GL_RGBA32I                        0x8D82
+#define GL_RGB32I                         0x8D83
+#define GL_RGBA16I                        0x8D88
+#define GL_RGB16I                         0x8D89
+#define GL_RGBA8I                         0x8D8E
+#define GL_RGB8I
+
+#define GL_RGBA32F                        0x8814
+#define GL_RGB32F                         0x8815
+#define GL_RGBA16F                        0x881A
+#define GL_RGB16F                         0x881B
+
+#define GL_DEPTH_STENCIL                  0x84F9
+#define GL_UNSIGNED_INT_24_8              0x84FA
+#define GL_DEPTH24_STENCIL8               0x88F0
+#define GL_DEPTH32F_STENCIL8              0x8CAD
+
+#define GL_FLOAT_32_UNSIGNED_INT_24_8_REV 0x8DAD
+
+#define GL_RGB10_A2UI                     0x906F
+#define GL_R11F_G11F_B10F                 0x8C3A
+#define GL_UNSIGNED_INT_10F_11F_11F_REV   0x8C3B
+#define GL_RGB9_E5                        0x8C3D
+#define GL_UNSIGNED_INT_5_9_9_9_REV       0x8C3E
+
+#define GL_COMPRESSED_RED_RGTC1           0x8DBB
+#define GL_COMPRESSED_SIGNED_RED_RGTC1    0x8DBC
+#define GL_COMPRESSED_RG_RGTC2            0x8DBD
+#define GL_COMPRESSED_SIGNED_RG_RGTC2     0x8DBE
+
+#define GL_COMPRESSED_RGBA_BPTC_UNORM     0x8E8C
+#define GL_COMPRESSED_SRGB_ALPHA_BPTC_UNORM 0x8E8D
+#define GL_COMPRESSED_RGB_BPTC_SIGNED_FLOAT 0x8E8E
+#define GL_COMPRESSED_RGB_BPTC_UNSIGNED_FLOAT 0x8E8
+
+#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT 0x8C4D
+#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT3_EXT 0x8C4E
+#define GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT 0x8C4F
+
+#include <cstdint>
+#include <cstring>
+#include <cassert>
 
 #define MAKE_FOURCC(c0, c1, c2, c3)			(c0 | (c1 << 8) | (c2 << 16) | (c3 << 24))
 #define BTX_MAGIC							MAKE_FOURCC('B', 'T', 'X', '2')
 
 class cBuffer;
+using TR_BYTE = char;
+constexpr uint32_t TR_UNKNOWN = 0xFFFFFFFF;
+
+template<typename T> class ctBits
+{
+private:
+
+    T m_state;
+
+public:
+
+    inline ctBits() : m_state(T(0))
+    {
+    }
+
+    inline ctBits(T bits) : m_state(bits)
+    {
+    }
+
+    inline void SetAllState(T bits)
+    {
+        m_state = bits;
+    }
+
+    inline void SetState(T mask)
+    {
+        m_state |= mask;
+    }
+
+    inline void ClearState(T mask)
+    {
+        m_state &= ~mask;
+    }
+
+    inline void ToggleState(T mask)
+    {
+        m_state ^= mask;
+    }
+
+    inline bool IsStateSet(T mask) const
+    {
+        return (m_state & mask) != 0;
+    }
+
+    inline bool IsStatesSet(T mask) const
+    {
+        return (m_state & mask) == mask;
+    }
+
+    inline T GetState(T mask) const
+    {
+        return m_state & mask;
+    }
+};
+
+// NOTE: typedefs
+
+typedef ctBits<uint32_t>		cBits32;
+typedef ctBits<uint16_t>		cBits16;
+typedef ctBits<uint8_t>			cBits8;
 
 namespace Sampler
 {
@@ -486,7 +613,7 @@ namespace Sampler
 			float			m_anisotropy;
 			Filter			m_filterMin;
 			Filter			m_filterMag;
-			Wrap			m_wrap[COORD_3D];
+			Wrap			m_wrap[3];
 			unsigned short	m_compareFunc;
 
 		private:
@@ -694,7 +821,7 @@ namespace Sampler
 			// NOTE: Misc name
 
 			inline const char* GetFilename() const				{ return m_pczFilename; }
-			inline void SetFilename(const char* name)			{ COM_Strcpy(m_pczFilename, name, MAX_NAMELEN); m_bLabelled = false; }
+			inline void SetFilename(const char* name)			{ memcpy(m_pczFilename, name, MAX_NAMELEN); m_bLabelled = false; }
 			inline void SetHashName(unsigned _hash)				{ m_hashName = _hash; }
 			inline unsigned GetHashName() const					{ return m_hashName; }
 
@@ -939,5 +1066,3 @@ namespace Sampler
 			}
 	};
 }
-
-#endif

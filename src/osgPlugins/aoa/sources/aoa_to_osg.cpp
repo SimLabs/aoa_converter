@@ -5,6 +5,10 @@
 #include <osg/Group>
 #include <osg/Geometry>
 #include <osg/PrimitiveSet>
+#include <osg/Texture2D>
+#include <osg/Texture3D>
+#include <osgDB/ReadFile>
+#include <osg/TexEnvCombine>
 #include <filesystem>
 #include <optional>
 
@@ -58,8 +62,10 @@ struct node_context
     node_context(string const& aoa_path, refl::aurora_format aoa, refl::node root_node)
         : root_node_(root_node)
         , data_buffer_description_(aoa.buffer_data)
+        , dirname_(path(aoa_path).parent_path())
+        , filename_(path(aoa_path).filename())
     {
-        std::ifstream buffer_file(path(aoa_path).parent_path() / string(aoa.buffer_data.data_buffer_file), std::ios_base::binary);
+        std::ifstream buffer_file(dirname_ / string(aoa.buffer_data.data_buffer_file), std::ios_base::binary);
         std::ostringstream ss;
         ss << buffer_file.rdbuf();
         auto content = ss.str();
@@ -67,12 +73,19 @@ struct node_context
         data_buffer_ = {content.begin(), content.end()};
 
         build_vertex_arrays_cache(aoa);
+        build_stateset_cache(aoa);
     }
 
     osg::Array* get_stream_vertex_attr_array(unsigned stream, unsigned attr_num) const
     {
         auto it = stream_attr_arrays_cache_.find(std::pair(stream, attr_num));
         return it != stream_attr_arrays_cache_.end() ? it->second.get() : nullptr;
+    }
+
+    osg::StateSet* get_material_stateset(string const& mat_name) const
+    {
+        auto it = stateset_cache_.find(mat_name);
+        return it != stateset_cache_.end() ? it->second.get() : nullptr;
     }
 
     osg::ref_ptr<osg::DrawElements> get_mesh_draw_elements(unsigned vao, unsigned stream_id, unsigned offset, unsigned count, unsigned base_vertex) const
@@ -186,17 +199,53 @@ struct node_context
         }
     }
 
+    void build_stateset_cache(refl::aurora_format aoa)
+    {
+        for(auto m: aoa.materials.list)
+        {
+            osg::ref_ptr<osg::StateSet> ss = new osg::StateSet();
+
+            for(int i = 0; i < m.textures.size(); ++i)
+            {
+                auto mat_group = m.textures[i];
+                auto tex_name = (dirname_ / filename_.replace_extension("img") / string(mat_group.texture)).string();
+                auto image = osgDB::readRefImageFile(tex_name);
+
+                if(image)
+                {
+                    auto num_levels = image->getNumMipmapLevels();
+                    osg::ref_ptr<osg::Texture> tex = image->r() > 1 
+                        ? osg::ref_ptr<osg::Texture>(new osg::Texture3D()) 
+                        : osg::ref_ptr<osg::Texture>(new osg::Texture2D());
+                    tex->setImage(0, image);
+                    ss->setTextureAttributeAndModes(i, tex, i == 0 ? osg::StateAttribute::ON : osg::StateAttribute::OFF);
+                }
+                else
+                {
+                    OSG_WARN << "AOA plugin: failed to read texture " << tex_name;
+                }
+            }
+
+            stateset_cache_.emplace(m.name, ss);
+        }
+    }
+
 private:
     refl::node root_node_;
     refl::data_buffer data_buffer_description_;
+    path dirname_;
+    path filename_;
     refl::node::controllers_t::control_object_param_data::data_buffer shared_streams_;
     std::map<pair<unsigned, unsigned>, osg::ref_ptr<osg::Array>> stream_attr_arrays_cache_;
+    std::map<string, osg::ref_ptr<osg::StateSet>> stateset_cache_;
     vector<char> data_buffer_;
 };
 
 osg::ref_ptr<osg::Group> convert_group_node(refl::node const& n, node_context const& context)
 {
-    return new osg::Group();
+    auto result = new osg::Group();
+    result->setName(n.name);
+    return result;
 }
 
 osg::ref_ptr<osg::Node> osg_geometry_from_aoa_mesh(refl::node::mesh_t mesh, node_context const& context)
@@ -231,6 +280,10 @@ osg::ref_ptr<osg::Node> osg_geometry_from_aoa_mesh(refl::node::mesh_t mesh, node
                 3 * mesh_params.with_shadow_mat->count,
                 mesh_params.with_shadow_mat->base_vertex
             ));
+
+            auto ss = context.get_material_stateset(string(mesh_params.with_shadow_mat->mat));
+            if(ss)
+                g->setStateSet(ss);
         }
 
         result->addChild(g);
@@ -240,34 +293,27 @@ osg::ref_ptr<osg::Node> osg_geometry_from_aoa_mesh(refl::node::mesh_t mesh, node
 }
 
 
-osg::ref_ptr<osg::Node> convert_geometry_node(refl::node const& n, node_context const& context)
+osg::ref_ptr<osg::Node> extract_mesh_as_osg_nodes(refl::node const& n, node_context const& context)
 {
     osg::ref_ptr<osg::Node> result;
     if(n.mesh)
         result = osg_geometry_from_aoa_mesh(*n.mesh, context);
-    else
-        result = new osg::Node();
+
+    if(result)
+        result->setName("geometry");
 
     return result;
 }
 
 osg::ref_ptr<osg::Node> aoa_node_to_osg_node(refl::node const& n, node_context const& context)
 {
-    osg::ref_ptr<osg::Node> result;
-    if(n.controllers.draw_mesh)
+    osg::ref_ptr<osg::Group> result = convert_group_node(n, context);
+    if(n.mesh)
     {
-        result = convert_geometry_node(n, context);
+        auto geom = extract_mesh_as_osg_nodes(n, context);
+        result->addChild(geom);
     } 
-    else
-    {
-        result = convert_group_node(n, context);
-    }
 
-    //std::string node_name = n.name;
-    //for(auto& c: node_name)
-    //    c = tolower(c);
-
-    result->setName(n.name);
     return result;
 }
 
@@ -336,7 +382,10 @@ osg::ref_ptr<osg::Node> aoa_to_osg(string const& path)
     for(auto n: osg_nodes)
     {
         if(caseInSensStringCompare(n->getName(), root_name))
+        {
+            //n->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
             return n;
+        }
     }
 
     assert(false);

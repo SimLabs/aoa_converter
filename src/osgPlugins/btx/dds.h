@@ -18,6 +18,7 @@
 
 #pragma once
 #include <cstdint>
+#include "dxgiformat.h"
 
 namespace DirectX
 {
@@ -226,11 +227,11 @@ struct DDS_HEADER
 
 struct DDS_HEADER_DXT10
 {
-    DXGI_FORMAT     dxgiFormat;
-    uint32_t        resourceDimension;
-    uint32_t        miscFlag; // see D3D11_RESOURCE_MISC_FLAG
-    uint32_t        arraySize;
-    uint32_t        miscFlags2; // see DDS_MISC_FLAGS2
+    DXGI_FORMAT     dxgiFormat = DXGI_FORMAT::DXGI_FORMAT_UNKNOWN;
+    uint32_t        resourceDimension = 0;
+    uint32_t        miscFlag = 0; // see D3D11_RESOURCE_MISC_FLAG
+    uint32_t        arraySize = 0;
+    uint32_t        miscFlags2 = 0; // see DDS_MISC_FLAGS2
 };
 
 #pragma pack(pop)
@@ -257,6 +258,8 @@ enum
 
     // pixel format flags
     DDSF_ALPHAPIXELS = 0x00000001,
+    DDSF_LUMINANCE = 0x00020000,
+    DDSF_ALPHA = 0x00000002,
     DDSF_FOURCC = 0x00000004,
     DDSF_RGB = 0x00000040,
     DDSF_RGBA = 0x00000041,
@@ -280,7 +283,10 @@ enum
     // compressed texture types
     FOURCC_DXT1 = 0x31545844, //(MAKEFOURCC('D','X','T','1'))
     FOURCC_DXT3 = 0x33545844, //(MAKEFOURCC('D','X','T','3'))
-    FOURCC_DXT5 = 0x35545844  //(MAKEFOURCC('D','X','T','5'))
+    FOURCC_DXT5 = 0x35545844,  //(MAKEFOURCC('D','X','T','5'))
+
+    FOURCC_ATI1 = (MAKEFOURCC('A','T','I','1')),
+    FOURCC_ATI2 = (MAKEFOURCC('A','T','I','2'))
 };
 
 } // DDS_constants
