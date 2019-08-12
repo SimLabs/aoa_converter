@@ -180,6 +180,18 @@ aoa_writer::node_ptr aoa_writer::node::set_control_ref_node_spec(string name, st
     return shared_from_this();
 }
 
+aoa_writer::node_ptr aoa_writer::node::set_control_lod_spec(float radius, vector<float> metric)
+{
+    pimpl_->node_descr.controllers.control_lod = boost::in_place();
+
+    std::sort(metric.begin(), metric.end(), std::greater<>());
+    
+    pimpl_->node_descr.controllers.control_lod->radius = radius;
+    pimpl_->node_descr.controllers.control_lod->lod_pixel = move(metric);
+
+    return node_ptr();
+}
+
 aoa_writer::node_ptr aoa_writer::node::add_ref_node_arg_spec(string chan, string type, float value)
 {
     assert(pimpl_->node_descr.controllers.node_ref);

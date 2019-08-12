@@ -4,6 +4,7 @@
 
 #include <osg/Group>
 #include <osg/Geometry>
+#include <osg/LOD>
 #include <osg/PrimitiveSet>
 #include <osg/Texture2D>
 #include <osg/Texture3D>
@@ -59,11 +60,12 @@ struct osg_node_cmp
 
 struct node_context
 {
-    node_context(string const& aoa_path, refl::aurora_format aoa, refl::node root_node)
+    node_context(string const& aoa_path, refl::aurora_format aoa, refl::node root_node, std::set<osg::ref_ptr<osg::Node>, osg_node_cmp>& osg_nodes)
         : root_node_(root_node)
         , data_buffer_description_(aoa.buffer_data)
         , dirname_(path(aoa_path).parent_path())
         , filename_(path(aoa_path).filename())
+        , osg_nodes_(osg_nodes)
     {
         std::ifstream buffer_file(dirname_ / string(aoa.buffer_data.data_buffer_file), std::ios_base::binary);
         std::ostringstream ss;
@@ -74,6 +76,12 @@ struct node_context
 
         build_vertex_arrays_cache(aoa);
         build_stateset_cache(aoa);
+    }
+
+    osg::ref_ptr<osg::Node> get_descendant_osg_node(string const& name) const
+    {
+        auto it  = osg_nodes_.find(name);
+        return it != osg_nodes_.end() ? *it : nullptr;
     }
 
     osg::Array* get_stream_vertex_attr_array(unsigned stream, unsigned attr_num) const
@@ -239,12 +247,12 @@ private:
     std::map<pair<unsigned, unsigned>, osg::ref_ptr<osg::Array>> stream_attr_arrays_cache_;
     std::map<string, osg::ref_ptr<osg::StateSet>> stateset_cache_;
     vector<char> data_buffer_;
+    std::set<osg::ref_ptr<osg::Node>, osg_node_cmp>& osg_nodes_;
 };
 
 osg::ref_ptr<osg::Group> convert_group_node(refl::node const& n, node_context const& context)
 {
     auto result = new osg::Group();
-    result->setName(n.name);
     return result;
 }
 
@@ -305,15 +313,45 @@ osg::ref_ptr<osg::Node> extract_mesh_as_osg_nodes(refl::node const& n, node_cont
     return result;
 }
 
+osg::ref_ptr<osg::LOD> convert_lod_node(refl::node const& n, node_context const& context)
+{
+    osg::ref_ptr<osg::LOD> result = new osg::LOD();
+    assert(n.controllers.control_lod);
+    result->setRadius(n.controllers.control_lod->radius);
+    result->setRangeMode(osg::LOD::PIXEL_SIZE_ON_SCREEN);
+
+    int lod_num = n.controllers.control_lod->lod_pixel.size();
+
+    if(n.children.children.size() != lod_num)
+    {
+        OSG_WARN << "AOA plugin: number of LODS is " << lod_num << ", but there are " << n.children.children.size() << " children" << std::endl;
+    }
+
+    for(int i = 0; i < lod_num; ++i)
+    {
+        float lod_pixel = n.controllers.control_lod->lod_pixel[i];
+        result->setRange(i, lod_pixel, std::numeric_limits<float>::infinity());
+    }
+
+    return result;
+}
+
 osg::ref_ptr<osg::Node> aoa_node_to_osg_node(refl::node const& n, node_context const& context)
 {
     osg::ref_ptr<osg::Group> result = convert_group_node(n, context);
+
+    if(n.controllers.control_lod)
+    {
+        result = convert_lod_node(n, context);
+    }
+
     if(n.mesh)
     {
         auto geom = extract_mesh_as_osg_nodes(n, context);
         result->addChild(geom);
     } 
 
+    result->setName(n.name);
     return result;
 }
 
@@ -343,27 +381,62 @@ osg::ref_ptr<osg::Node> aoa_to_osg(string const& path)
     std::set<refl::node, node_cmp> nodes{aoa.nodes.begin(), aoa.nodes.end()};
     std::set<osg::ref_ptr<osg::Node>, osg_node_cmp> osg_nodes;
 
-    std::optional<refl::node> root_node;
 
+    bool found = false;
     for(auto n : nodes)
     {
         if(caseInSensStringCompare(n.name, root_name))
         {
-            root_node = n;
+            root_name = n.name;
+            found = true;
             break;
         }
     }
 
-    assert(root_node);
+    assert(found);
 
-    node_context context(path, aoa, *root_node);
-
-    std::transform(nodes.begin(), nodes.end(), std::inserter(osg_nodes, osg_nodes.end()), 
-        [&context](auto const& n)
+    map<string, vector<string>> edges;
+    map<string, bool> visited;
+    for(auto const& n: nodes)
+    {
+        for(auto const& c: n.children.children)
         {
-            return aoa_node_to_osg_node(n, context);
+            edges[n.name].push_back(c);
         }
-    );
+    }
+
+    vector<string> traversal_order;
+
+    std::function<void(string const&)> dfs;
+    dfs = [&](string const& n)
+    {
+        visited[n] = true;
+        for(auto c: edges[n])
+        {
+            if(!visited[c])
+            {
+                dfs(c);
+            }
+        }
+        traversal_order.push_back(n);
+    };
+
+    for(auto const& n: nodes)
+    {
+        if(!visited[n.name])
+            dfs(n.name);
+    }
+
+    refl::node root_node = *nodes.find(root_name);
+    node_context context(path, aoa, root_node, osg_nodes);
+
+    // reverse topological order
+    // added this when there seemed to be a need to access children of converted nodes
+    // but for now the need disappeared
+    for(auto node_name: traversal_order)
+    {
+        osg_nodes.insert(aoa_node_to_osg_node(*nodes.find(node_name), context));
+    }
 
     for(auto const&n : nodes)
     {
@@ -379,17 +452,9 @@ osg::ref_ptr<osg::Node> aoa_to_osg(string const& path)
         }
     }
 
-    for(auto n: osg_nodes)
-    {
-        if(caseInSensStringCompare(n->getName(), root_name))
-        {
-            //n->getOrCreateStateSet()->setMode(GL_LIGHTING, osg::StateAttribute::ON | osg::StateAttribute::OVERRIDE);
-            return n;
-        }
-    }
-
-    assert(false);
-    return nullptr;
+    auto it = osg_nodes.find(root_name);
+    assert(it != osg_nodes.end());
+    return *it;
 }
 
 }

@@ -68,6 +68,7 @@ struct aoa_writer
         node_ptr  set_cvbox_spec(geom::rectangle_3f const& box);
         node_ptr  set_cvsphere_spec(geom::sphere_3f const& sphere);
         node_ptr  set_control_ref_node_spec(string name, string sub_channel = {});
+        node_ptr  set_control_lod_spec(float radius, vector<float> metric);
         node_ptr  add_ref_node_arg_spec(string chan, string type, float value);
         node_ptr  set_translation(geom::point_3f pos);
         node_ptr  set_rotation(geom::quaternionf rot);

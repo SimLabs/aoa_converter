@@ -81,6 +81,11 @@ DECLARE_AURORA_FIELD(CONTROL_LIGHTPOINT_POWER_MUL)
 DECLARE_AURORA_FIELD(CONTROL_OUT_OF_RANGE)
 DECLARE_AURORA_FIELD(CONTROL_KEY_CHANNEL)
 DECLARE_AURORA_FIELD(CONTROL_LIGHTPOINT_POWER_MUL_KEY)
+
+DECLARE_AURORA_FIELD(CONTROL_LOD_PIXEL)
+DECLARE_AURORA_FIELD(CONTROL_LOD_RADIUS)
+DECLARE_AURORA_FIELD(CONTROL_NUMBER_LOD)
+
 DECLARE_AURORA_FIELD(CHANNEL_FILENAME)
 DECLARE_AURORA_FIELD(DEF_ARG)
 DECLARE_AURORA_FIELD(ARG)
@@ -588,6 +593,17 @@ struct node
             REFL_END()
         };
 
+        struct control_lod
+        {
+            float radius;
+            vector<float> lod_pixel;
+
+            REFL_INNER(control_lod)
+                REFL_ENTRY_NAMED(radius, Field__CONTROL_LOD_RADIUS)
+                REFL_ENTRY_NAMED_WITH_TAG(lod_pixel, Field__CONTROL_LOD_PIXEL, aurora_vector_field_tag(Field__CONTROL_NUMBER_LOD))
+            REFL_END()
+        };
+
         template<class T>
         unsigned count_field(optional<T> const& f) const
         {
@@ -604,7 +620,8 @@ struct node
                    count_field(control_pos) + 
                    count_field(control_rot) + 
                    count_field(node_ref) +
-                   count_field(control_light_power);
+                   count_field(control_light_power) + 
+                   count_field(control_lod);
         }
 
         optional<control_object_param_data> object_param_controller;
@@ -616,6 +633,7 @@ struct node
         optional<control_rot_linear>        control_rot;
         optional<control_node_ref>          node_ref;
         optional<control_lightpoint_power_mul> control_light_power;
+        optional<control_lod>               control_lod;
 
         REFL_INNER(controllers_t)
             auto size = lobj.num_controllers();
@@ -629,6 +647,7 @@ struct node
             REFL_ENTRY_NAMED(control_rot, Field__CONTROL_ROT_LINEAR)
             REFL_ENTRY_NAMED(node_ref, Field__CONTROL_REF_NODE)
             REFL_ENTRY_NAMED(control_light_power, Field__CONTROL_LIGHTPOINT_POWER_MUL)
+            REFL_ENTRY_NAMED(control_lod, Field__CONTROL_LOD_PIXEL)
         REFL_END()
     };
 

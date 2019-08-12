@@ -17,14 +17,19 @@ struct write_aoa_visitor : osg::NodeVisitor
 {
     write_aoa_visitor(material_loader&, aoa_writer&);
 
+    void apply(osg::Group & group) override;
     void apply(osg::Geode    &geode)    override;
     void apply(osg::Geometry &geometry) override;
     void apply(osg::LightSource& light_source) override;
+    void apply(osg::LOD& lod) override;
 
     void write_aoa();
     void write_debug_obj_file(string file_name) const;
 
 private:
+    aoa_writer::node_ptr current_node() { return aoa_nodes_stack_.top(); }
+    auto create_node_scope(osg::Node& n);
+    string get_unique_node_name(string desired);
     vector<size_t> const &get_chunks(osg::Geode const &geode) const;
 
     chunk_info_opt_material const &get_chunk(size_t index) const;
@@ -52,6 +57,9 @@ private:
     vector<face>                    faces_;
     vector<chunk_info_opt_material> chunks_;
 
+    std::stack<aoa_writer::node_ptr> aoa_nodes_stack_;
+    bool                             root_visited_ = false;
+    std::set<string>                 node_names_;
 };
 
 using write_aoa_visitor_ptr = shared_ptr<write_aoa_visitor>;

@@ -5,6 +5,7 @@
 #include <osg/Material>
 #include <osg/LightSource>
 #include <osg/Geode>
+#include <osg/LOD>
 
 #include "material_loader.h"
 #include "aurora_aoa_writer.h"
@@ -14,6 +15,26 @@ namespace aurora
 
 namespace
 {
+
+template<class T>
+class push_pop_object
+{
+public:
+
+    push_pop_object(std::stack<T>& s, T const& value)
+        : _valueStack(s)
+    {
+        _valueStack.push(value);
+    }
+
+    ~push_pop_object()
+    {
+        _valueStack.pop();
+    }
+
+protected:
+    std::stack<T>&  _valueStack;
+};
 
 string material_name_for_chunk(string name, material_info const& data)
 {
@@ -37,22 +58,49 @@ write_aoa_visitor::write_aoa_visitor(material_loader& l, aoa_writer& w)
 {
 }
 
+auto write_aoa_visitor::create_node_scope(osg::Node & n)
+{
+    if(root_visited_)
+    {
+        return push_pop_object(aoa_nodes_stack_, current_node()->create_child(get_unique_node_name(n.getName())));
+    }
+    else
+    {
+        root_visited_ = true;
+        return push_pop_object(aoa_nodes_stack_, aoa_writer_.get_root_node());
+    }
+}
+
+void write_aoa_visitor::apply(osg::Group & group)
+{
+    auto ppo = create_node_scope(group);
+    traverse(group);
+}
+
 void write_aoa_visitor::apply(osg::Geode &geode)
 {
+    auto ppo = create_node_scope(geode);
+
     if (geode2chunks_.find(&geode) != geode2chunks_.end())
         return;
     current_geode_ = &geode;
+
+
+
+
     traverse(geode);
 }
 
 void write_aoa_visitor::apply(osg::Geometry &geometry)
 {
+    //auto ppo = create_node_scope(geometry);
+
     static unsigned count = 0;
     chunk_info_opt_material chunk;
     
     extract_texture_info(geometry, chunk);
 
-    chunk.name = geometry.getName().empty() ? "object_" + std::to_string(++count) : geometry.getName();
+    chunk.name = get_unique_node_name(geometry.getName());
     chunk.vertex_range = collect_verticies(geometry);
     if (chunk.vertex_range.hi() == chunk.vertex_range.lo())
     {
@@ -71,6 +119,49 @@ void write_aoa_visitor::apply(osg::Geometry &geometry)
 
     geode2chunks_[current_geode_].push_back(chunks_.size());
     chunks_.push_back(chunk);
+
+    vector<vertex_info> vertices(get_verticies().begin() + chunk.vertex_range.lo(), get_verticies().begin() + chunk.vertex_range.hi());
+    vector<face>        faces(get_faces().begin() + chunk.faces_range.lo(), get_faces().begin() + chunk.faces_range.hi());
+    vector<geom::point_3f> col_attrs;
+    vector<face>        col_faces = faces;
+
+    std::transform(begin(vertices), end(vertices), back_inserter(col_attrs),
+        [](auto const& v) { return v.pos; });
+
+    using vertex_attribute = aoa_writer::vertex_attribute;
+    vector<vertex_attribute> vertex_format;
+    vertex_format.push_back(vertex_attribute
+    {   /*.id      = */ 0,
+                                          /*.size    = */ 3,
+                                          /*.type    = */ vertex_attribute::type_t::FLOAT,
+                                          /*.mode    = */ vertex_attribute::mode_t::ATTR_MODE_FLOAT,
+                                          /*.divisor = */ 0
+    });
+
+    vertex_format.push_back(vertex_attribute
+    {   /*.id      = */ 1,
+                                          /*.size    = */ 3,
+                                          /*.type    = */ vertex_attribute::type_t::FLOAT,
+                                          /*.mode    = */ vertex_attribute::mode_t::ATTR_MODE_FLOAT,
+                                          /*.divisor = */ 0
+    });
+
+    vertex_format.push_back(vertex_attribute
+    {   /*.id      = */ 4,
+                                          /*.size    = */ 2,
+                                          /*.type    = */ vertex_attribute::type_t::FLOAT,
+                                          /*.mode    = */ vertex_attribute::mode_t::ATTR_MODE_FLOAT,
+                                          /*.divisor = */ 0
+    });
+
+    vector<vertex_attribute> col_attrs_format{ vertex_format.front() };
+
+    aoa_writer_.add_material(material_name_for_chunk(chunk.name, chunk.material), chunk.material);
+
+    //current_node()->set_cvbox_spec(bbox);
+    current_node()->create_child(chunk.name)->add_mesh(chunk.aabb, vertices, vertex_format, faces, 250.f, material_name_for_chunk(chunk.name, chunk.material));
+    current_node()->create_child(get_unique_node_name(chunk.name + "_col"))
+        ->add_collision_mesh(col_attrs, col_faces, col_attrs_format);
 }
 
 void write_aoa_visitor::apply(osg::LightSource & light_source)
@@ -109,6 +200,39 @@ void write_aoa_visitor::apply(osg::LightSource & light_source)
 
     //    spot_lights.push_back(spot);
     //}
+}
+
+void write_aoa_visitor::apply(osg::LOD & lod)
+{
+    auto ppo = create_node_scope(lod);
+
+    vector<float> metric;
+
+    for(auto r: lod.getRangeList())
+        metric.push_back(r.first);
+
+    current_node()->set_control_lod_spec(lod.getRadius(), metric);
+
+    traverse(lod);
+}
+
+string write_aoa_visitor::get_unique_node_name(string desired)
+{
+    if(desired.empty())
+    {
+        OSG_WARN << "AOA plugin: node name is empty, setting it to 'node'" << std::endl;
+        desired = "node";
+    }
+
+    string node_name = desired;
+    int i = 1;
+    // ensure node names are unique
+    while(node_names_.find(node_name) != node_names_.end())
+    {
+        node_name = desired + " " + std::to_string(i++);
+    }
+    node_names_.insert(node_name);
+    return node_name;
 }
 
 vector<size_t> const & write_aoa_visitor::get_chunks(osg::Geode const &geode) const
@@ -296,34 +420,6 @@ void write_aoa_visitor::write_aoa()
 
     aoa_writer::node_ptr root = aoa_writer_.get_root_node();
 
-    using vertex_attribute = aoa_writer::vertex_attribute;
-    vector<vertex_attribute> vertex_format;
-    vertex_format.push_back(vertex_attribute
-    {   /*.id      = */ 0,
-                                          /*.size    = */ 3,
-                                          /*.type    = */ vertex_attribute::type_t::FLOAT,
-                                          /*.mode    = */ vertex_attribute::mode_t::ATTR_MODE_FLOAT,
-                                          /*.divisor = */ 0
-    });
-
-    vertex_format.push_back(vertex_attribute
-    {   /*.id      = */ 1,
-                                          /*.size    = */ 3,
-                                          /*.type    = */ vertex_attribute::type_t::FLOAT,
-                                          /*.mode    = */ vertex_attribute::mode_t::ATTR_MODE_FLOAT,
-                                          /*.divisor = */ 0
-    });
-
-    vertex_format.push_back(vertex_attribute
-    {   /*.id      = */ 4,
-                                          /*.size    = */ 2,
-                                          /*.type    = */ vertex_attribute::type_t::FLOAT,
-                                          /*.mode    = */ vertex_attribute::mode_t::ATTR_MODE_FLOAT,
-                                          /*.divisor = */ 0
-    });
-
-    vector<vertex_attribute> col_attrs_format{vertex_format.front()};
-
     geom::rectangle_3f bbox;
 
     for(auto const& chunk: get_chunks())
@@ -331,25 +427,7 @@ void write_aoa_visitor::write_aoa()
         bbox |= chunk.aabb;
     }
 
-    for(auto const& chunk : get_chunks())
-    {
-        vector<vertex_info> vertices(get_verticies().begin() + chunk.vertex_range.lo(), get_verticies().begin() + chunk.vertex_range.hi());
-        vector<face>        faces(get_faces().begin() + chunk.faces_range.lo(), get_faces().begin() + chunk.faces_range.hi());
-        vector<geom::point_3f> col_attrs;
-        vector<face>        col_faces = faces;
-
-        std::transform(begin(vertices), end(vertices), back_inserter(col_attrs), 
-            [](auto const& v){ return v.pos; });
-
-        aoa_writer_.add_material(material_name_for_chunk(chunk.name, chunk.material), chunk.material);
-
-        root->set_cvbox_spec(bbox);
-        root->create_child(chunk.name)
-            ->add_mesh(chunk.aabb, vertices, vertex_format, faces, 250.f, material_name_for_chunk(chunk.name, chunk.material));
-        root->create_child(chunk.name + "_col")
-            ->add_collision_mesh(col_attrs, col_faces, col_attrs_format);
-    }
-
+    root->set_cvbox_spec(bbox);
     aoa_writer_.save_data();
 }
 
