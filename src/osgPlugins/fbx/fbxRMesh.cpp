@@ -5,6 +5,7 @@
 #include <osg/Geode>
 #include <osg/Image>
 #include <osg/MatrixTransform>
+#include <osg/LOD>
 #include <osg/TexMat>
 #include <osg/TexGen>
 #include <osg/TexEnvCombine>
@@ -24,6 +25,8 @@
 #include <fbxsdk.h>
 
 #include "fbxReader.h"
+#include "fbxUtils.h"
+#include "fbxCustomDefs.h"
 
 enum GeometryType
 {
@@ -1247,4 +1250,35 @@ osgDB::ReaderWriter::ReadResult OsgFbxReader::readFbxMesh(FbxNode* pNode,
 
     return readMesh(pNode, lMesh, stateSetList,
         pNode->GetName());
+}
+
+osgDB::ReaderWriter::ReadResult OsgFbxReader::readFbxLod(FbxNode * pNode)
+{
+    FbxLODGroup* fbxLod = FbxCast<FbxLODGroup>(pNode->GetNodeAttribute());
+
+    if(!fbxLod)
+    {
+        return osgDB::ReaderWriter::ReadResult::ERROR_IN_READING_FILE;
+    }
+
+    bool found;
+    auto lod_radius = getFbxObjPropValue<float>(pNode, LOD_RADIUS_PROPERTY, found);
+
+    osg::LOD* osgLod = new osg::LOD();
+
+    if(found)
+    {
+        osgLod->setRadius(lod_radius);
+    }
+
+    for (int i = 0; i < pNode->GetChildCount(); ++i)
+    {
+        FbxNode* child = pNode->GetChild(i);
+        auto lod_metric = getFbxObjPropValue<float>(child, LOD_PIXEL_PROPERTY, found);
+
+        if(found)
+            osgLod->setRange(i, lod_metric, std::numeric_limits<float>::infinity());
+    }
+
+    return osgLod;
 }

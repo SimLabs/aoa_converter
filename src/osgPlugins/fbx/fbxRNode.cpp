@@ -572,6 +572,28 @@ osgDB::ReaderWriter::ReadResult OsgFbxReader::readFbxNode(
             }
         }
         break;
+    case FbxNodeAttribute::eLODGroup:
+        {
+            osgDB::ReaderWriter::ReadResult res = readFbxLod(pNode);
+            if(res.error())
+            {
+                return res;
+            }
+            else if(osg::Group* resGroup = dynamic_cast<osg::Group*>(res.getObject()))
+            {
+                bEmpty = false;
+                if(animName.empty() &&
+                    bLocalMatrixIdentity)
+                {
+                    osgGroup = resGroup;
+                }
+                else
+                {
+                    children.insert(children.begin(), resGroup);
+                }
+            }
+        }
+        break;
     default:
         break;
     }

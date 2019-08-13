@@ -76,6 +76,9 @@ public:
     osgDB::ReaderWriter::ReadResult readFbxMesh(
         FbxNode* pNode,
         std::vector<StateSetContent>&);
+
+    osgDB::ReaderWriter::ReadResult readFbxLod(
+        FbxNode* pNode);
 };
 
 osgAnimation::Skeleton* getSkeleton(FbxNode*,

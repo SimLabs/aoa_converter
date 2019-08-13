@@ -14,6 +14,7 @@
 
 #include <climits>                     // required for UINT_MAX
 #include <cassert>
+#include <osg/LOD>
 #include <osg/CullFace>
 #include <osg/MatrixTransform>
 #include <osg/NodeVisitor>
@@ -21,6 +22,8 @@
 #include <osgDB/FileUtils>
 #include <osgDB/WriteFile>
 #include "WriterNodeVisitor.h"
+#include "fbxUtils.h"
+#include "fbxCustomDefs.h"
 
 
 // Use namespace qualification to avoid static-link symbol collisions
@@ -711,6 +714,40 @@ void WriterNodeVisitor::apply(osg::MatrixTransform& node)
     _curFbxNode->LclRotation.Set(FbxDouble3(vec4[0], vec4[1], vec4[2]));
 
     traverse(node);
+    _curFbxNode = parent;
+}
+
+void WriterNodeVisitor::apply(osg::LOD & node)
+{
+    FbxNode* parent = _curFbxNode;
+
+    FbxNode* nodeFBX = FbxNode::Create(_pSdkManager, node.getName().empty() ? "DefaultName" : node.getName().c_str());
+    FbxLODGroup *lodGroupAttr = FbxLODGroup::Create(_pSdkManager, "LODGroup");
+    nodeFBX->SetNodeAttribute(lodGroupAttr);
+
+    auto p = FbxProperty::Create(nodeFBX, FbxFloatDT, LOD_RADIUS_PROPERTY);
+    p.Set<FbxFloat>(node.getRadius());
+
+    _curFbxNode->AddChild(nodeFBX);
+    _curFbxNode = nodeFBX;
+
+    traverse(node);
+
+    assert(node.getNumChildren() == unsigned(_curFbxNode->GetChildCount()));
+
+    for(int i = 0; i < _curFbxNode->GetChildCount(); ++i)
+    {
+        if(unsigned(i) < node.getNumRanges())
+        {
+            FbxNode* child = _curFbxNode->GetChild(i);
+            auto pp = FbxProperty::Create(child, FbxFloatDT, LOD_PIXEL_PROPERTY);
+            pp.Set<FbxFloat>(node.getMinRange(i));
+        }
+    }
+
+    if(_listTriangles.size() > 0)
+        buildFaces(node.getName(), _geometryList, _listTriangles, _texcoords);
+
     _curFbxNode = parent;
 }
 
