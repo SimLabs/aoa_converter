@@ -108,11 +108,13 @@ DECLARE_AURORA_FIELD(NUM_COLLISION_VOLUME)
 
 struct aurora_vector_field_tag
 {
-    aurora_vector_field_tag(const char* size_field = nullptr)
+    aurora_vector_field_tag(const char* size_field = nullptr, bool check_size = true)
         : size_field(size_field)
+        , check_size(check_size)
     {}
 
     const char* size_field;
+    bool check_size;
 };
 
 struct quoted_string
@@ -519,8 +521,15 @@ struct node
 
             vector<cv_mesh> meshes;
 
+            // NOTE on check_size:
+            // control_collision_volume can contain sections in different formats
+            // and #NUM_COLLISION_VOLUME is the total number of such sections.
+            // Currently only one format is handled so when reading a file 
+            // containing collision info in other formats the size may be wrong.
+            // TODO: if other formats will be needed use variant or something like that
+            // and remove check_size.
             REFL_INNER(control_collision_volume)
-                REFL_ENTRY_NAMED_WITH_TAG(meshes, Field__CONTROL_CVMESH2, aurora_vector_field_tag(/*Field__NUM_COLLISION_VOLUME*/))
+                REFL_ENTRY_NAMED_WITH_TAG(meshes, Field__CONTROL_CVMESH2, aurora_vector_field_tag(Field__NUM_COLLISION_VOLUME, /* check_size = */ false))
             REFL_END()
         };
 

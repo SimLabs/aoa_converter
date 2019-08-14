@@ -100,7 +100,8 @@ struct read_processor
         {
             size_t size;
             this->operator()(size, t.size_field);
-            assert(size == count);
+            if(t.check_size)
+                assert(size == count);
         }
 
         value.resize(count);          
