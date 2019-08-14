@@ -24,6 +24,7 @@
 #include "WriterNodeVisitor.h"
 #include "fbxUtils.h"
 #include "fbxCustomDefs.h"
+#include "fbxMaterialToOsgStateSet.h"
 
 
 // Use namespace qualification to avoid static-link symbol collisions
@@ -276,8 +277,6 @@ void PrimitiveIndexWriter::drawArrays(GLenum mode,GLint first,GLsizei count)
 WriterNodeVisitor::Material::Material(WriterNodeVisitor& writerNodeVisitor,
                                       osgDB::ExternalFileWriter & externalWriter,
                                       const osg::StateSet* stateset,
-                                      const osg::Material* mat,
-                                      const osg::Texture* tex,
                                       FbxManager* pSdkManager,
                                       const osgDB::ReaderWriter::Options * options,
                                       int index) :
@@ -294,7 +293,8 @@ WriterNodeVisitor::Material::Material(WriterNodeVisitor& writerNodeVisitor,
     float shininess(0);
     float transparency(0);
 
-    if (mat)
+    const osg::Material* mat = dynamic_cast<const osg::Material*>(stateset->getAttribute(osg::StateAttribute::MATERIAL));
+    if(mat)
     {
         assert(stateset);
         diffuse = mat->getDiffuse(osg::Material::FRONT);
@@ -305,15 +305,15 @@ WriterNodeVisitor::Material::Material(WriterNodeVisitor& writerNodeVisitor,
         transparency = 1 - diffuse.w();
 
         const osg::StateAttribute* attribute = stateset->getAttribute(osg::StateAttribute::CULLFACE);
-        if (attribute)
+        if(attribute)
         {
             assert(dynamic_cast<const osg::CullFace*>(attribute));
             osg::CullFace::Mode mode = static_cast<const osg::CullFace*>(attribute)->getMode();
-            if (mode == osg::CullFace::FRONT)
+            if(mode == osg::CullFace::FRONT)
             {
                 OSG_WARN << "FBX Writer: Reversed face (culled FRONT) not supported yet." << std::endl;
             }
-            else if (mode != osg::CullFace::BACK)
+            else if(mode != osg::CullFace::BACK)
             {
                 assert(mode == osg::CullFace::FRONT_AND_BACK);
                 OSG_WARN << "FBX Writer: Invisible face (culled FRONT_AND_BACK) not supported yet." << std::endl;
@@ -321,7 +321,7 @@ WriterNodeVisitor::Material::Material(WriterNodeVisitor& writerNodeVisitor,
         }
 
         _fbxMaterial = FbxSurfacePhong::Create(pSdkManager, mat->getName().c_str());
-        if (_fbxMaterial)
+        if(_fbxMaterial)
         {
             _fbxMaterial->DiffuseFactor.Set(1);
             _fbxMaterial->Diffuse.Set(FbxDouble3(
@@ -349,25 +349,51 @@ WriterNodeVisitor::Material::Material(WriterNodeVisitor& writerNodeVisitor,
             _fbxMaterial->Shininess.Set(shininess);
         }
     }
-    if (tex && tex->getImage(0))
+
+    for(unsigned i = 0; i < std::min(unsigned(StateSetContent::NUM_TEXTURE_UNITS), stateset->getNumTextureAttributeLists()); ++i)
     {
-        _osgImage = tex->getImage(0);
+        const osg::Texture* tex = dynamic_cast<const osg::Texture*>(stateset->getTextureAttribute(i, osg::StateAttribute::TEXTURE));
 
-        std::string relativePath;
-        externalWriter.write(*_osgImage, options, NULL, &relativePath);
+        if(tex && tex->getImage(0))
+        {
+            _osgImage = tex->getImage(0);
 
-        _fbxTexture = FbxFileTexture::Create(pSdkManager, relativePath.c_str());
-        _fbxTexture->SetFileName(relativePath.c_str());
-        // Create a FBX material if needed
-        if (!_fbxMaterial)
-        {
-            _fbxMaterial = FbxSurfacePhong::Create(pSdkManager, relativePath.c_str());
-        }
-        // Connect texture to material's diffuse
-        // Note there should be no reason FbxSurfacePhong::Create() would return NULL, but as previous code made this secirity test, here we keep the same way.
-        if (_fbxMaterial)
-        {
-            _fbxMaterial->Diffuse.ConnectSrcObject(_fbxTexture);
+            std::string relativePath;
+            externalWriter.write(*_osgImage, options, NULL, &relativePath);
+
+            _fbxTexture = FbxFileTexture::Create(pSdkManager, relativePath.c_str());
+            _fbxTexture->SetFileName(relativePath.c_str());
+            // Create a FBX material if needed
+            if(!_fbxMaterial)
+            {
+                _fbxMaterial = FbxSurfacePhong::Create(pSdkManager, relativePath.c_str());
+            }
+
+            // Note there should be no reason FbxSurfacePhong::Create() would return NULL, but as previous code made this secirity test, here we keep the same way.
+            if(_fbxMaterial)
+            {
+                switch(StateSetContent::TextureUnit(i))
+                {
+                    case StateSetContent::DIFFUSE_TEXTURE_UNIT:
+                        _fbxMaterial->Diffuse.ConnectSrcObject(_fbxTexture); break;
+                    case StateSetContent::OPACITY_TEXTURE_UNIT:
+                        _fbxMaterial->TransparentColor.ConnectSrcObject(_fbxTexture); break;
+                    case StateSetContent::REFLECTION_TEXTURE_UNIT:
+                        _fbxMaterial->Reflection.ConnectSrcObject(_fbxTexture); break;
+                    case StateSetContent::EMISSIVE_TEXTURE_UNIT:
+                        _fbxMaterial->Emissive.ConnectSrcObject(_fbxTexture); break;
+                    case StateSetContent::AMBIENT_TEXTURE_UNIT:
+                        _fbxMaterial->Ambient.ConnectSrcObject(_fbxTexture); break;
+                    case StateSetContent::NORMAL_TEXTURE_UNIT:
+                        _fbxMaterial->NormalMap.ConnectSrcObject(_fbxTexture); break;
+                    case StateSetContent::SPECULAR_TEXTURE_UNIT:
+                        _fbxMaterial->Specular.ConnectSrcObject(_fbxTexture); break;
+                    case StateSetContent::SHININESS_TEXTURE_UNIT:
+                        _fbxMaterial->Shininess.ConnectSrcObject(_fbxTexture); break;
+                    default:
+                        OSG_WARN << "FBX plugin: texture unit " << i << " not handled" << std::endl;
+                }
+            }
         }
     }
 }
@@ -384,13 +410,12 @@ int WriterNodeVisitor::processStateSet(const osg::StateSet* ss)
     }
 
     const osg::Material* mat = dynamic_cast<const osg::Material*>(ss->getAttribute(osg::StateAttribute::MATERIAL));
-    const osg::Texture* tex = dynamic_cast<const osg::Texture*>(ss->getTextureAttribute(0, osg::StateAttribute::TEXTURE));
 
-    if (mat || tex)
+    if (mat || ss->getNumTextureAttributeLists() > 0)
     {
         int matNum = _lastMaterialIndex;
         _materialMap.insert(MaterialMap::value_type(MaterialMap::key_type(ss),
-            Material(*this, _externalWriter, ss, mat, tex, _pSdkManager, _options, matNum)));
+            Material(*this, _externalWriter, ss, _pSdkManager, _options, matNum)));
         ++_lastMaterialIndex;
         return matNum;
     }

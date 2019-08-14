@@ -50,8 +50,9 @@ struct StateSetContent
         AMBIENT_TEXTURE_UNIT,
         NORMAL_TEXTURE_UNIT,
         SPECULAR_TEXTURE_UNIT,
-        SHININESS_TEXTURE_UNIT
+        SHININESS_TEXTURE_UNIT,
         // more texture units here...
+        NUM_TEXTURE_UNITS
     };
 
 

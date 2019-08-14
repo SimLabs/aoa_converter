@@ -139,8 +139,6 @@ class WriterNodeVisitor: public osg::NodeVisitor
             Material(WriterNodeVisitor&   writerNodeVisitor,
                      osgDB::ExternalFileWriter & externalWriter,
                      const osg::StateSet* stateset,
-                     const osg::Material* mat,
-                     const osg::Texture*  tex,
                      FbxManager*      pSdkManager,
                      const osgDB::ReaderWriter::Options * options,
                      int                  index = -1);
