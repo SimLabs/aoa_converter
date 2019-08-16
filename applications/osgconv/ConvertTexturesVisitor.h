@@ -15,6 +15,7 @@ struct ConvertTexturesVisitor : osg::NodeVisitor
     void write(const std::string &dir);
 private:
     void apply(osg::StateSet& stateset);
+    void convertImage(osg::Image& image, std::string const& dir);
 
     std::string extension_;
     typedef std::set< osg::ref_ptr<osg::Texture> > TextureSet;

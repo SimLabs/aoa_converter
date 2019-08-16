@@ -217,15 +217,19 @@ struct node_context
             {
                 auto mat_group = m.textures[i];
                 auto tex_name = (dirname_ / filename_.replace_extension("img") / string(mat_group.texture)).string();
-                auto image = osgDB::readRefImageFile(tex_name);
+                auto read_result = osgDB::Registry::instance()->readObject(tex_name, nullptr);
 
-                if(image)
+                if(auto image = read_result.getImage())
                 {
                     auto num_levels = image->getNumMipmapLevels();
                     osg::ref_ptr<osg::Texture> tex = image->r() > 1 
                         ? osg::ref_ptr<osg::Texture>(new osg::Texture3D()) 
                         : osg::ref_ptr<osg::Texture>(new osg::Texture2D());
                     tex->setImage(0, image);
+                    ss->setTextureAttributeAndModes(i, tex, i == 0 ? osg::StateAttribute::ON : osg::StateAttribute::OFF);
+                }
+                else if(auto tex = dynamic_cast<osg::Texture*>(read_result.getObject()))
+                {
                     ss->setTextureAttributeAndModes(i, tex, i == 0 ? osg::StateAttribute::ON : osg::StateAttribute::OFF);
                 }
                 else
