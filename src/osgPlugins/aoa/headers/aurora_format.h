@@ -101,10 +101,16 @@ DECLARE_AURORA_FIELD(SPOT)
 DECLARE_AURORA_FIELD(CLASS)
 
 DECLARE_AURORA_FIELD(COLLISION_BUFFER_STREAM)
+DECLARE_AURORA_FIELD(CONTROL_CVMESH)
 DECLARE_AURORA_FIELD(CONTROL_CVMESH2)
 DECLARE_AURORA_FIELD(CVMESH_VERTEX_FILE_FORMAT_OFFSET_COUNT)
 DECLARE_AURORA_FIELD(CVMESH_INDEX_FILE_OFFSET_COUNT)
 DECLARE_AURORA_FIELD(NUM_COLLISION_VOLUME)
+DECLARE_AURORA_FIELD(MESH_VERTEX_LIST)
+DECLARE_AURORA_FIELD(MESH_FACE_LIST)
+DECLARE_AURORA_FIELD(MESH_VERTEX)
+DECLARE_AURORA_FIELD(MESH_INDEX)
+
 
 struct aurora_vector_field_tag
 {
@@ -513,13 +519,44 @@ struct node
                 format_offset_size vertex_vao_offset_size;
                 offset_size        index_offset_size;
 
+ 
                 REFL_INNER(cv_mesh)
                     REFL_ENTRY_NAMED(vertex_vao_offset_size, Field__CVMESH_VERTEX_FILE_FORMAT_OFFSET_COUNT)
                     REFL_ENTRY_NAMED(index_offset_size, Field__CVMESH_INDEX_FILE_OFFSET_COUNT)
                 REFL_END()
             };
 
-            vector<cv_mesh> meshes;
+            struct cv_mesh_emb
+            {
+                struct mesh_vertex_list
+                {
+                    vector<std::tuple<unsigned, float, float, float>>  entries;
+
+                    REFL_INNER(mesh_vertex_list)
+                        REFL_ENTRY_NAMED_WITH_TAG(entries, Field__MESH_VERTEX, aurora_vector_field_tag{})
+                        REFL_END()
+                };
+
+                struct mesh_face_list
+                {
+                    vector<std::tuple<unsigned, unsigned>>  entries;
+
+                    REFL_INNER(mesh_face_list)
+                        REFL_ENTRY_NAMED_WITH_TAG(entries, Field__MESH_INDEX, aurora_vector_field_tag{})
+                        REFL_END()
+                };
+
+                mesh_vertex_list          vertices;
+                mesh_face_list            faces;     
+                
+                REFL_INNER(cv_mesh_emb)
+                    REFL_ENTRY_NAMED(vertices, Field__MESH_VERTEX_LIST)
+                    REFL_ENTRY_NAMED(faces, Field__MESH_FACE_LIST)
+                REFL_END()
+            };
+
+            vector<cv_mesh>        meshes;
+            vector<cv_mesh_emb>    embedded_meshes;
 
             // NOTE on check_size:
             // control_collision_volume can contain sections in different formats
@@ -530,6 +567,7 @@ struct node
             // and remove check_size.
             REFL_INNER(control_collision_volume)
                 REFL_ENTRY_NAMED_WITH_TAG(meshes, Field__CONTROL_CVMESH2, aurora_vector_field_tag(Field__NUM_COLLISION_VOLUME, /* check_size = */ false))
+                REFL_ENTRY_NAMED_WITH_TAG(embedded_meshes, Field__CONTROL_CVMESH, aurora_vector_field_tag{})
             REFL_END()
         };
 
