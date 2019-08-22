@@ -70,7 +70,7 @@ struct half_array_to_osg
         auto result_data = (raw_data_type)(result->getDataPointer());
         std::advance(b, offset);
         unsigned i = 0;
-        for(; b < e; std::advance(b, stride), i++)
+        for(; b < e; std::advance(b, std::min(stride, unsigned(std::distance(b, e)))), i++)
         {
             const geom::half* val = reinterpret_cast<const geom::half*>(&(*b));
             for(unsigned j = 0; j < Size; j++)
