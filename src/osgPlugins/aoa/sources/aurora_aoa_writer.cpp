@@ -2,6 +2,7 @@
 #include "write_aoa_visitor.h"
 #include "aurora_format.h"
 #include "aurora_write_processor.h"
+#include "osgDB/FileUtils"
 
 namespace aurora
 {
@@ -514,8 +515,9 @@ struct aoa_writer::impl
         : filename_(name)
         , self_(self)
         , buffer_file_(fs::path(name).filename().replace_extension("aod").string())
-        , file_(fs::path(name).replace_extension("aod").string(), std::ios_base::binary | std::ios_base::out)
+        , file_(std::ios_base::binary | std::ios_base::out | std::ios_base::in)
     {
+        file_.exceptions(std::ios_base::failbit | std::ios_base::badbit);
     }
 
     void write(const void* data, size_t size)
@@ -544,6 +546,7 @@ struct aoa_writer::impl
         reflect(proc, aoa_descr_);
 
         std::ofstream aoa_file(filename_);
+        aoa_file.exceptions(std::ios_base::failbit | std::ios_base::badbit);
         aoa_file << proc.result();
     }
 
@@ -748,7 +751,7 @@ struct aoa_writer::impl
     aoa_writer& self_;
     string   filename_;
     string   buffer_file_;
-    ofstream file_;
+    std::stringstream file_;
     node_ptr root_;
     vector<node_ptr> nodes_;
     refl::aurora_format aoa_descr_;
@@ -823,7 +826,11 @@ void aoa_writer::save_data()
     pimpl_->write(&vertex_buffer_size, sizeof(unsigned));
 
     // finally, write aoa file
+    osgDB::makeDirectoryForFile(pimpl_->filename_);
     pimpl_->write_aoa();
+    std::ofstream aod_file(fs::path(pimpl_->filename_).replace_extension("aod").string(), std::ios_base::binary | std::ios_base::out);
+    aod_file.exceptions(std::ios_base::failbit | std::ios_base::badbit);
+    aod_file << pimpl_->file_.rdbuf();
 }
 
 void aoa_writer::node::set_omni_lights_buffer_data(vector<aod::omni_light> const & data)
