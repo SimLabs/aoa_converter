@@ -4,12 +4,14 @@ from zipfile import ZipFile
 from collections import defaultdict
 from pathlib import Path
 import tempfile
-from subprocess import check_call, CalledProcessError
+from subprocess import check_call, CalledProcessError, STDOUT
 
 OSG_DIST_PATH = Path(r'E:\repos\aoa_converter\build\bin')
 ORIGINAL_PATH = Path(r'E:\repos\aurora\!work\scenes\objects\buildings\asia')
 IN_DIR = Path(r'E:\repos\aurora\!work\objects\test\all_static')
 OUT_DIR = Path(r'E:\repos\aurora\!work\scenes\objects\buildings\asia_new')
+
+ENV = {'OSG_NOTIFY_LEVEL': 'DEBUG'}
 
 path_diff = lambda x, y: Path(x).relative_to(Path(y))
 
@@ -33,8 +35,12 @@ if __name__ == '__main__':
                             if filename.endswith('.fbx'):
                                 in_path = str(Path(archive_dirpath) / filename)
                                 out_path = str(Path(temp_dir) / path_diff(archive_dirpath, dir_that_was_one_archive) / Path(filename).with_suffix('.aoa'))
+                                log_path = Path(out_path).with_name('log.txt')
                                 try:
-                                    check_call(['osgconvd', '--convert-textures', 'dds', in_path, out_path])
+                                    Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+                                    with open(log_path, 'w') as log_file:
+                                        check_call(['osgconvd', '--convert-textures', 'dds', in_path, out_path],
+                                                   env=ENV, stdout=log_file, stderr=STDOUT)
                                 except CalledProcessError as e:
                                     # raise
                                     print(in_path, 'was not converted', file=sys.stderr)
