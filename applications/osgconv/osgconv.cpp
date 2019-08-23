@@ -878,13 +878,17 @@ int main( int argc, char **argv )
         {
             osg::notify(osg::NOTICE)<<"Data written to '"<<fileNameOut<<"'."<< std::endl;
         }
-        else if  (result.message().empty())
-        {
-            osg::notify(osg::NOTICE)<<"Warning: file write to '"<<fileNameOut<<"' not supported."<< std::endl;
-        }
         else
         {
-            osg::notify(osg::NOTICE)<<result.message()<< std::endl;
+            if (result.message().empty())
+            {
+                osg::notify(osg::NOTICE)<<"Warning: file write to '"<<fileNameOut<<"' not supported."<< std::endl;
+            }
+            else
+            {
+                osg::notify(osg::NOTICE)<<result.message()<< std::endl;
+            }
+            return 1;
         }
     }
     else
