@@ -109,7 +109,6 @@ struct detect_light_node_visitor : osg::NodeVisitor
         auto root_it = std::find_if(nodes_path.cbegin(), nodes_path_end, [this](auto const n){  return is_root_node(n); });
         if(root_it == nodes_path_end)
         {
-            OSG_FATAL << "AOA plugin: root node was not found" << std::endl;
             return false;
         }
 
