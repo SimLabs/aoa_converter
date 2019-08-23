@@ -24,7 +24,7 @@ if __name__ == '__main__':
             print('removed airports-db')
         for file in filenames:
             if os.path.splitext(file)[1] == '.arsc':
-                archive_path = os.path.join(dirpath, file)
+                archive_path = Path(dirpath) / file
                 with ZipFile(archive_path) as archive:
                     with tempfile.TemporaryDirectory() as temp_dir:
                         archive.extractall(path=temp_dir)
@@ -32,7 +32,7 @@ if __name__ == '__main__':
                             for filename in archive_filenames:
                                 if filename.endswith('.aoa'):
                                     in_path = str(Path(archive_dirpath) / filename)
-                                    out_path = str(OUT_DIR / path_diff(dirpath, IN_DIR) / path_diff(archive_dirpath, temp_dir) / Path(filename).with_suffix('.fbx'))
+                                    out_path = str(OUT_DIR / path_diff(archive_path.with_suffix(''), IN_DIR) / path_diff(archive_dirpath, temp_dir) / Path(filename).with_suffix('.fbx'))
                                     try:
                                         check_call(['osgconvd', '--convert-textures', 'dds', in_path, out_path])
                                     except CalledProcessError as e:
