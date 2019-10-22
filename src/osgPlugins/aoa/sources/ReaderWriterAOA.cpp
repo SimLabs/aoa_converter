@@ -19,6 +19,7 @@
 #include "write_aoa_visitor.h"
 #include "aurora_aoa_writer.h"
 #include "convert_textures_visitor.h"
+#include "tesselate_visitor.h"
 #include "fix_materials_visitor.h"
 #include "lights_generation_visitor.h"
 #include "material_loader.h"
@@ -27,6 +28,8 @@
 #include "aoa_to_osg.h"
 
 #include <filesystem>
+#include <thread>
+#include "osgUtil/Tessellator"
 
 using namespace aurora;
 
@@ -92,6 +95,7 @@ public:
         //supportsOption("generateFacetNormals","generate facet normals for verticies without normals");
         //supportsOption("noReverseFaces","avoid to reverse faces when normals and triangles orientation are reversed");
 
+        supportsOption("TESSELATE=<maxsize>", "Tesselation parameter");
         //supportsOption("DIFFUSE=<unit>", "Set texture unit for diffuse texture");
         //supportsOption("AMBIENT=<unit>", "Set texture unit for ambient texture");
         //supportsOption("SPECULAR=<unit>", "Set texture unit for specular texture");
@@ -104,14 +108,31 @@ public:
 
     const char* className() const override { return "Aurora engine AOA Writer"; }
 
-    ReadResult readNode(const std::string& file_name, const Options* /*options*/) const override
+    ReadResult readNode(const std::string& file_name, const Options* options) const override
     {
         if(!std::filesystem::exists(file_name))
             return ReadResult(ReadResult::FILE_NOT_FOUND);
         else
         {
-            auto osg_root = aurora::aoa_to_osg(file_name);
+            auto osg_root = aoa_to_osg(file_name);
             if(!osg_root) return osg_root;
+
+            if (options) {
+                auto optionsString = options->getOptionString();
+                OSG_INFO << "Options: " << optionsString << std::endl;
+
+                std::string tesselateOption = "TESSELATE=";
+                if (auto tesselatePos = optionsString.find(tesselateOption); tesselatePos != std::string::npos) {
+                    std::istringstream is(optionsString.substr(tesselatePos + tesselateOption.size()));
+
+                    float tesselateParam;
+                    is >> tesselateParam;
+
+                    OSG_INFO << "Splitting to size " << tesselateParam << std::endl;
+                    tesselate_visitor tesselation_visitor(tesselateParam);
+                    osg_root->accept(tesselation_visitor);
+                }
+            }
 
             // convert all textures to some format
             //aurora::convert_textures_visitor texture_visitor("dds");
