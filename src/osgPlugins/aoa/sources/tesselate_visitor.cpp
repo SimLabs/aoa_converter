@@ -16,11 +16,13 @@ namespace
     }
 
     template<typename T, osg::Array::Type ARRAYTYPE, int DataSize, int DataType>
-    void try_add_middle(osg::TemplateArray<T, ARRAYTYPE, DataSize, DataType> *arr, unsigned int ia, unsigned int ib)
+    void try_add_middle(osg::TemplateArray<T, ARRAYTYPE, DataSize, DataType> *arr, unsigned int ia, unsigned int ib, float alpha)
     {
         if (arr)
-            arr->push_back((arr->at(ia) + arr->at(ib)) / 2);
+            arr->push_back(arr->at(ia) * (1 - alpha) + arr->at(ib) * alpha);
     }
+
+    const float EPS = 1e-3;
 }
 
 namespace aurora
@@ -39,73 +41,107 @@ void tesselate_visitor::apply(osg::Geometry &geometry)
         osg::Geometry::ArrayList *tex_coords_list;
         osg::DrawElementsUInt *out_indices;
 
-        void operator()(unsigned int ia, unsigned int ib, unsigned int ic)
-        {
-            const osg::Vec3 &a = vertices->at(ia);
-            const osg::Vec3 &b = vertices->at(ib);
-            const osg::Vec3 &c = vertices->at(ic);
+        typedef unsigned int vertex_id_t;
 
-            if (triangle_needs_split(a, b, c))
+        void operator()(vertex_id_t ia0, vertex_id_t ib0, vertex_id_t ic0)
+        {
+            std::deque<std::tuple<vertex_id_t, vertex_id_t, vertex_id_t>> q;
+            q.emplace_back(ia0, ib0, ic0);
+
+            while (!q.empty())
             {
-                if ((a - b).length2() > std::max((b - c).length2(), (a - c).length2()))
+                auto[ia, ib, ic] = q.front();
+                q.pop_front();
+
+                auto a = vertices->at(ia);
+                auto b = vertices->at(ib);
+                auto c = vertices->at(ic);
+                auto rotate_counter_clockwise = [&a, &b, &c, &ia, &ib, &ic]()
                 {
-                    unsigned int iab = split_edge(ia, ib);
-                    operator()(ia, iab, ic);
-                    operator()(ib, ic, iab);
+                    std::swap(ia, ib);
+                    std::swap(ic, ib);
+                    std::swap(a, b);
+                    std::swap(c, b);
+                };
+
+                while ((a - b).length2() < std::max((a - c).length2(), (b - c).length2()))
+                    rotate_counter_clockwise();
+
+                bool found = false;
+                for (int rotations = 0; rotations < 2 && !found; ++rotations) {
+                    if (over_the_edge(a.x(), b.x()) || over_the_edge(a.y(), b.y()))
+                    {
+                        float alpha = 1.0f;
+                        auto is_better_alpha = [&alpha](float new_alpha)
+                        {
+                            return EPS < new_alpha && new_alpha < 1 - EPS && abs(new_alpha - 0.5) < abs(alpha - 0.5);
+                        };
+
+                        if (const float alpha_x = get_alpha(a.x(), b.x()); is_better_alpha(alpha_x))
+                            alpha = alpha_x;
+                        if (const float alpha_y = get_alpha(a.y(), b.y()); is_better_alpha(alpha_y))
+                            alpha = alpha_y;
+
+                        if (EPS < alpha && alpha < 1 - EPS)
+                        {
+                            vertex_id_t iab = split_edge(ia, ib, alpha);
+                            q.emplace_back(ic, ia, iab);
+                            q.emplace_back(ib, ic, iab);
+                            found = true;
+                        }
+                    }
+
+                    rotate_counter_clockwise();
                 }
-                else if ((b - c).length2() > (a - c).length2())
-                {
-                    unsigned int ibc = split_edge(ib, ic);
-                    operator()(ia, ib, ibc);
-                    operator()(ibc, ic, ia);
+
+                if (!found) {
+                    out_indices->push_back(ia);
+                    out_indices->push_back(ib);
+                    out_indices->push_back(ic);
                 }
-                else
-                {
-                    unsigned int iac = split_edge(ia, ic);
-                    operator()(ia, ib, iac);
-                    operator()(ib, ic, iac);
-                }
-            }
-            else
-            {
-                out_indices->push_back(ia);
-                out_indices->push_back(ib);
-                out_indices->push_back(ic);
             }
         }
 
     private:
-        unsigned int split_edge(unsigned int ia, unsigned int ib)
+        float triangle_area(osg::Vec3 &a, osg::Vec3 &b, osg::Vec3 &c) const
         {
-            unsigned int iab = vertices->size();
+            return abs(((a - b) ^ (a - c)).length());
+        }
 
-            try_add_middle(vertices, ia, ib);
-            try_add_middle(normals, ia, ib); // TODO: slerp
-            try_add_middle(colors, ia, ib);
-            try_add_middle(secondary_colors, ia, ib);
-            try_add_middle(fog, ia, ib);
-            for (int i = 0; i < tex_coords_list->size(); ++i)
+        float get_border(const float a, const float b) const
+        {
+            if (a < b)
+                return (static_cast<int>((a + EPS) / size_threshold) + 1) * size_threshold;
+            return (static_cast<int>((b + EPS) / size_threshold) + 1) * size_threshold;
+        }
+
+        float get_alpha(const float a, const float b) const
+        {
+            return (get_border(a, b) - a) / (b - a);
+        }
+
+        bool over_the_edge(const float a, const float b) const
+        {
+            const float border = get_border(a, b);
+            return a < border - EPS && border + EPS < b || b < border - EPS && border + EPS < a;
+        }
+
+        vertex_id_t split_edge(const vertex_id_t ia, const vertex_id_t ib, const float alpha) const
+        {
+            const vertex_id_t iab = vertices->size();
+
+            try_add_middle(vertices, ia, ib, alpha);
+            try_add_middle(normals, ia, ib, alpha); // TODO: slerp
+            try_add_middle(colors, ia, ib, alpha);
+            try_add_middle(secondary_colors, ia, ib, alpha);
+            try_add_middle(fog, ia, ib, alpha);
+            for (auto& i : *tex_coords_list)
             {
-                osg::Vec2Array *tex_coords = try_use_array<osg::Vec2Array>(tex_coords_list->at(i));
-                try_add_middle(tex_coords, ia, ib);
+                auto *tex_coords = try_use_array<osg::Vec2Array>(i);
+                try_add_middle(tex_coords, ia, ib, alpha);
             }
 
             return iab;
-        }
-
-        bool triangle_needs_split(const osg::Vec3 &a, const osg::Vec3 &b, const osg::Vec3 &c)
-        {
-            return segment_needs_split(a, b) || segment_needs_split(b, c) || segment_needs_split(c, a);
-        }
-
-        bool segment_needs_split(const osg::Vec3 &a, const osg::Vec3 &b)
-        {
-            return !(in_adjacent_cells(a.x(), b.x()) && in_adjacent_cells(a.y(), b.y())); //  && in_adjacent_cells(a.z(), b.z())
-        }
-
-        bool in_adjacent_cells(const float a, const float b)
-        {
-            return abs(static_cast<int>(a / size_threshold) - static_cast<int>(b / size_threshold)) <= 1;
         }
     };
 
