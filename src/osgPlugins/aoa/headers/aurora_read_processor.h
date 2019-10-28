@@ -113,7 +113,7 @@ struct read_processor
     }
 
     template<class Type>
-    void operator()(optional<Type> & value, dict_t const& entry)
+    void operator()(std::optional<Type> & value, dict_t const& entry)
     {
         Type v;
         this->operator() (v, entry);

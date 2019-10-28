@@ -3,6 +3,8 @@
 #include "cpp_utils/refl_operators.h"
 #include "geometry/primitives/sphere.h"
 
+#include <optional>
+
 #define DECLARE_AURORA_FIELD(name) \
     constexpr char* Field__## name = "#" #name;
 
@@ -336,7 +338,7 @@ struct node
                 REFL_END()
             };
             
-            optional<mesh_face_offset_count_base_mat> with_shadow_mat;
+            std::optional<mesh_face_offset_count_base_mat> with_shadow_mat;
 
             REFL_INNER(mesh_face)
                 REFL_ENTRY_NAMED(with_shadow_mat, Field__MESH_FACE_OFFSET_COUNT_MTLNAME3)
@@ -457,7 +459,7 @@ struct node
 
                 vector<geometry_buffer_stream> geometry_streams;
                 vector<light_buffer_stream>    light_streams;
-                optional<collision_buffer_stream> collision_stream;
+                std::optional<collision_buffer_stream> collision_stream;
 
                 REFL_INNER(data_buffer)
                     REFL_ENTRY_NAMED_WITH_TAG(geometry_streams, Field__GEOMETRY_BUFFER_STREAM, aurora_vector_field_tag(Field__GEOMETRY_STREAM_NUM_ELEM))
@@ -500,8 +502,8 @@ struct node
                 REFL_END()
             };
         
-            optional<cv_box> cvbox;
-            optional<cv_sphere> cvsphere;
+            std::optional<cv_box> cvbox;
+            std::optional<cv_sphere> cvsphere;
             // just wrapper 
             data_buffer buffer;
 
@@ -593,16 +595,16 @@ struct node
 
         struct control_node_ref
         {
-            control_node_ref(string name = {}, optional<string> sub_ch = boost::none)
+            control_node_ref(string name = {}, std::optional<string> sub_ch = std::nullopt)
             {
                 std::get<0>(scope_name) = "GLOBAL";
                 std::get<1>(scope_name) = name;
-                sub_channel = sub_ch && !sub_ch->empty() ? optional<quoted_string>(*sub_ch) : boost::none;       
+                sub_channel = sub_ch && !sub_ch->empty() ? std::optional<quoted_string>(*sub_ch) : std::nullopt;       
             }
 
             std::tuple<string, quoted_string> scope_name;
-            optional<quoted_string>           sub_channel;
-            optional<node::def_args>          args;
+            std::optional<quoted_string>           sub_channel;
+            std::optional<node::def_args>          args;
 
             REFL_INNER(control_node_ref)
                 REFL_ENTRY_NAMED(scope_name, Field__CONTROL_REF_NODE_NAME)
@@ -652,7 +654,7 @@ struct node
         };
 
         template<class T>
-        unsigned count_field(optional<T> const& f) const
+        unsigned count_field(std::optional<T> const& f) const
         {
             return bool(f) ? 1 : 0;
         }
@@ -671,16 +673,16 @@ struct node
                    count_field(control_lod);
         }
 
-        optional<control_object_param_data> object_param_controller;
-        optional<string>                    treat_children;
-        optional<string>                    draw_mesh;
-        optional<string>                    draw_lightpoint;
-        optional<control_collision_volume>  collision_volume;
-        optional<control_pos_linear>        control_pos;
-        optional<control_rot_linear>        control_rot;
-        optional<control_node_ref>          node_ref;
-        optional<control_lightpoint_power_mul> control_light_power;
-        optional<control_lod>               control_lod;
+        std::optional<control_object_param_data> object_param_controller;
+        std::optional<string>                    treat_children;
+        std::optional<string>                    draw_mesh;
+        std::optional<string>                    draw_lightpoint;
+        std::optional<control_collision_volume>  collision_volume;
+        std::optional<control_pos_linear>        control_pos;
+        std::optional<control_rot_linear>        control_rot;
+        std::optional<control_node_ref>          node_ref;
+        std::optional<control_lightpoint_power_mul> control_light_power;
+        std::optional<control_lod>               control_lod;
 
         REFL_INNER(controllers_t)
             auto size = lobj.num_controllers();
@@ -700,8 +702,8 @@ struct node
 
     struct lightpoint2
     {
-        optional<offset_size> omni_offset_size;
-        optional<offset_size> spot_offset_size;
+        std::optional<offset_size> omni_offset_size;
+        std::optional<offset_size> spot_offset_size;
         unsigned              clazz = 0;
 
         REFL_INNER(lightpoint2)
@@ -712,15 +714,15 @@ struct node
     };
 
     quoted_string name;
-    optional<string> scope;
+    std::optional<string> scope;
     unsigned flags;
-    optional<quoted_string> channel_filename;
-    optional<def_args> args;
+    std::optional<quoted_string> channel_filename;
+    std::optional<def_args> args;
     unsigned draw_order = 0;
     node_children children;
-    optional<mesh_t> mesh;
+    std::optional<mesh_t> mesh;
     controllers_t controllers;
-    optional<lightpoint2> lightpoint2;
+    std::optional<lightpoint2> lightpoint2;
 
     REFL_INNER(node)
         REFL_ENTRY_NAMED(name, Field__NODE_NAME)

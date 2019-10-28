@@ -45,6 +45,17 @@ struct lights_buffer
         return sizeof(std::remove_reference_t<decltype(this->spot_lights)>::value_type) * spot_lights.size();
     }
 };
+
+struct in_place
+{
+    template<typename T>
+    operator std::optional<T>() const
+    {
+        return std::optional<T>(std::in_place);
+    }
+
+};
+
 }
 
 struct buffer_chunk
@@ -104,11 +115,11 @@ aoa_writer::node_ptr aoa_writer::node::add_flags(uint32_t flags)
 {
     if(flags & node_flags::TREAT_CHILDREN)
     {
-        pimpl_->node_descr.controllers.treat_children = boost::in_place();
+        pimpl_->node_descr.controllers.treat_children = in_place();
     }
     if(flags & node_flags::DRAW_LIGHTPOINTS)
     {
-        pimpl_->node_descr.controllers.draw_lightpoint = boost::in_place();
+        pimpl_->node_descr.controllers.draw_lightpoint = in_place();
     }
     if(flags & node_flags::GLOBAL_NODE)
     {
@@ -127,7 +138,7 @@ aoa_writer::node_ptr aoa_writer::node::set_cvbox_spec(geom::rectangle_3f const &
 {
     if(!pimpl_->node_descr.controllers.object_param_controller)
     {
-        pimpl_->node_descr.controllers.object_param_controller = boost::in_place();
+        pimpl_->node_descr.controllers.object_param_controller = in_place();
     }
 
     refl::node::controllers_t::control_object_param_data::cv_box cvbox(box);
@@ -139,7 +150,7 @@ aoa_writer::node_ptr aoa_writer::node::set_cvsphere_spec(geom::sphere_3f const &
 {
     if(!pimpl_->node_descr.controllers.object_param_controller)
     {
-        pimpl_->node_descr.controllers.object_param_controller = boost::in_place();
+        pimpl_->node_descr.controllers.object_param_controller = in_place();
     }
 
     refl::node::controllers_t::control_object_param_data::cv_sphere cvsphere(sphere);
@@ -151,7 +162,7 @@ aoa_writer::node_ptr aoa_writer::node::add_control_pos_key_spec(float key, geom:
 {
     if(!pimpl_->node_descr.controllers.control_pos)
     {
-        pimpl_->node_descr.controllers.control_pos = boost::in_place();
+        pimpl_->node_descr.controllers.control_pos = in_place();
     }
 
     pimpl_->node_descr.controllers.control_pos->keys.emplace_back(key, pos.x, pos.y, pos.z);
@@ -162,7 +173,7 @@ aoa_writer::node_ptr aoa_writer::node::add_control_rot_key_spec(float key, geom:
 {
     if(!pimpl_->node_descr.controllers.control_rot)
     {
-        pimpl_->node_descr.controllers.control_rot = boost::in_place();
+        pimpl_->node_descr.controllers.control_rot = in_place();
     }
 
     pimpl_->node_descr.controllers.control_rot->keys.emplace_back(key, rot.get_v().x, rot.get_v().y, rot.get_v().z, rot.get_w());
@@ -173,7 +184,7 @@ aoa_writer::node_ptr aoa_writer::node::set_control_ref_node_spec(string name, st
 {
     if(!pimpl_->node_descr.controllers.node_ref)
     {
-        pimpl_->node_descr.controllers.node_ref = boost::in_place();
+        pimpl_->node_descr.controllers.node_ref = in_place();
     }
 
     *pimpl_->node_descr.controllers.node_ref = {name, sub_channel};
@@ -183,7 +194,7 @@ aoa_writer::node_ptr aoa_writer::node::set_control_ref_node_spec(string name, st
 
 aoa_writer::node_ptr aoa_writer::node::set_control_lod_spec(float radius, vector<float> metric)
 {
-    pimpl_->node_descr.controllers.control_lod = boost::in_place();
+    pimpl_->node_descr.controllers.control_lod = in_place();
 
     std::sort(metric.begin(), metric.end(), std::greater<>());
     
@@ -198,7 +209,7 @@ aoa_writer::node_ptr aoa_writer::node::add_ref_node_arg_spec(string chan, string
     assert(pimpl_->node_descr.controllers.node_ref);
     if(!pimpl_->node_descr.controllers.node_ref->args)
     {
-        pimpl_->node_descr.controllers.node_ref->args = boost::in_place();
+        pimpl_->node_descr.controllers.node_ref->args = in_place();
     }
     
     pimpl_->node_descr.controllers.node_ref->args->list.emplace_back(chan, *cpp_utils::string_to_enum<refl::node::arg_type>(type), value);
@@ -225,7 +236,7 @@ aoa_writer::node_ptr aoa_writer::node::set_control_light_power_spec(string chann
 {
     if(!pimpl_->node_descr.controllers.control_light_power)
     {
-        pimpl_->node_descr.controllers.control_light_power = boost::in_place();
+        pimpl_->node_descr.controllers.control_light_power = in_place();
     }
 
     pimpl_->node_descr.controllers.control_light_power->keys = keys;
@@ -244,7 +255,7 @@ aoa_writer::node_ptr aoa_writer::node::add_arg_spec(string channel, string type,
 {
     if(!pimpl_->node_descr.args)
     {
-        pimpl_->node_descr.args = boost::in_place();
+        pimpl_->node_descr.args = in_place();
     }
     
     pimpl_->node_descr.args->list.emplace_back(channel, *cpp_utils::string_to_enum<refl::node::arg_type>(type), value);
@@ -255,7 +266,7 @@ aoa_writer::node_ptr aoa_writer::node::set_collision_stream_spec(pair<unsigned, 
 {
     if(!pimpl_->node_descr.controllers.object_param_controller)
     {
-        pimpl_->node_descr.controllers.object_param_controller = boost::in_place();
+        pimpl_->node_descr.controllers.object_param_controller = in_place();
     }
 
     collision_buffer_stream col_stream;
@@ -271,7 +282,7 @@ aoa_writer::node_ptr aoa_writer::node::set_collision_stream_spec(pair<unsigned, 
 
 aoa_writer::node_ptr aoa_writer::node::add_cvmesh_spec(unsigned vao, std::pair<unsigned, unsigned> vertex_offset_size, std::pair<unsigned, unsigned> index_offset_size)
 {
-    pimpl_->node_descr.controllers.collision_volume = boost::in_place();
+    pimpl_->node_descr.controllers.collision_volume = in_place();
 
     auto& collsion_volume = pimpl_->node_descr.controllers.collision_volume.value();
     std::remove_reference_t<decltype(collsion_volume.meshes)>::value_type mesh;
@@ -292,16 +303,16 @@ aoa_writer::node_ptr aoa_writer::node::add_mesh_spec(geom::rectangle_3f bbox, un
 {
     if(!pimpl_->node_descr.mesh)
     {
-        pimpl_->node_descr.mesh = boost::in_place();
+        pimpl_->node_descr.mesh = in_place();
     }
 
     auto& mesh = pimpl_->node_descr.mesh.value();
 
-    pimpl_->node_descr.controllers.draw_mesh = boost::in_place();
+    pimpl_->node_descr.controllers.draw_mesh = in_place();
 
     refl::node::mesh_t::mesh_face mesh_geom;
 
-    mesh_geom.with_shadow_mat = boost::in_place();
+    mesh_geom.with_shadow_mat = in_place();
 
     mesh_geom.with_shadow_mat->id = 0;
     mesh_geom.with_shadow_mat->offset = offset;
@@ -361,7 +372,7 @@ aoa_writer::node_ptr aoa_writer::node::add_geometry_stream(float lod, pair<unsig
 {
     if(!pimpl_->node_descr.controllers.object_param_controller)
     {
-        pimpl_->node_descr.controllers.object_param_controller = boost::in_place();
+        pimpl_->node_descr.controllers.object_param_controller = in_place();
     }
 
     geometry_buffer_stream geom_stream;
@@ -380,7 +391,7 @@ aoa_writer::node_ptr aoa_writer::node::add_omnilights_stream(unsigned offset, un
 {
     if(!pimpl_->node_descr.controllers.object_param_controller)
     {
-        pimpl_->node_descr.controllers.object_param_controller = boost::in_place();
+        pimpl_->node_descr.controllers.object_param_controller = in_place();
     }
 
     light_buffer_stream omni_lights;
@@ -396,7 +407,7 @@ aoa_writer::node_ptr aoa_writer::node::add_spotlights_stream(unsigned offset, un
 {
     if(!pimpl_->node_descr.controllers.object_param_controller)
     {
-        pimpl_->node_descr.controllers.object_param_controller = boost::in_place();
+        pimpl_->node_descr.controllers.object_param_controller = in_place();
     }
 
     light_buffer_stream spot_lights;
@@ -411,7 +422,7 @@ aoa_writer::node_ptr aoa_writer::node::add_spotlights_stream(unsigned offset, un
 aoa_writer::node_ptr aoa_writer::node::set_omni_lights(unsigned offset, unsigned size)
 {
     if(!pimpl_->node_descr.lightpoint2)
-        pimpl_->node_descr.lightpoint2 = boost::in_place();
+        pimpl_->node_descr.lightpoint2 = in_place();
 
     add_flags(aoa_writer::DRAW_LIGHTPOINTS);
 
@@ -422,7 +433,7 @@ aoa_writer::node_ptr aoa_writer::node::set_omni_lights(unsigned offset, unsigned
 aoa_writer::node_ptr aoa_writer::node::set_spot_lights(unsigned offset, unsigned size)
 {
     if(!pimpl_->node_descr.lightpoint2)
-        pimpl_->node_descr.lightpoint2 = boost::in_place();
+        pimpl_->node_descr.lightpoint2 = in_place();
 
     add_flags(aoa_writer::DRAW_LIGHTPOINTS);
 

@@ -103,7 +103,7 @@ struct write_processor
     }
 
     template<class Type>
-    void operator()(optional<Type> const& value, const char* key)
+    void operator()(std::optional<Type> const& value, const char* key)
     {
         if(value)
             this->operator ()(*value, key);

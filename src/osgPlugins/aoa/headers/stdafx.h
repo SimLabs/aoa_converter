@@ -19,3 +19,5 @@ using boost::optional;
 
 #undef Verify
 #define Verify assert
+
+#include <optional>
