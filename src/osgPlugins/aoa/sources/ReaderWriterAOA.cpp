@@ -30,6 +30,9 @@
 #include <filesystem>
 #include <thread>
 #include "osgUtil/Tessellator"
+#include "aurora_aoa_reader.h"
+#include "aurora_write_processor.h"
+#include "aurora_mesh_subdivider.h"
 
 using namespace aurora;
 
@@ -95,6 +98,7 @@ public:
         //supportsOption("generateFacetNormals","generate facet normals for verticies without normals");
         //supportsOption("noReverseFaces","avoid to reverse faces when normals and triangles orientation are reversed");
 
+        supportsOption("USE_DUMMY", "Forces to process aoa file without conversion to osg format");
         supportsOption("TESSELATE=<maxsize>", "Tesselation parameter");
         //supportsOption("DIFFUSE=<unit>", "Set texture unit for diffuse texture");
         //supportsOption("AMBIENT=<unit>", "Set texture unit for ambient texture");
@@ -112,6 +116,12 @@ public:
     {
         if(!std::filesystem::exists(file_name))
             return ReadResult(ReadResult::FILE_NOT_FOUND);
+        else if (options && options->getOptionString().find("USE_DUMMY") != std::string::npos)
+        {
+            aoa = read_aoa(file_name);
+            aoa_path = file_name;
+            return new osg::Node;
+        }
         else
         {
             auto osg_root = aoa_to_osg(file_name);
@@ -177,7 +187,7 @@ public:
                 using boost::escaped_list_separator;
                 using so_tokenizer = tokenizer<escaped_list_separator<char>>;
 
-                so_tokenizer tok(options->getOptionString(), escaped_list_separator<char>('\\', ' ', '\"'));
+                so_tokenizer tok(options->getOptionString(), escaped_list_separator<char>(','));
                 for(so_tokenizer::iterator beg = tok.begin(); beg != tok.end(); ++beg)
                 {
                     split_opts.push_back(*beg);
@@ -203,53 +213,77 @@ public:
                 config_path = "aoa.config.json";
             auto config = get_config(config_path);
 
-            //////////////////////////////////////////////
-            // add transform
-            osg::ref_ptr<osg::MatrixTransform> transform = new osg::MatrixTransform(config.get_full_transform());
-            transform->addChild(const_cast<osg::Node*>(&node));
-            osg::Node& osg_root = *transform;
-            OSG_INFO << "flip Y and Z: " << config.flip_YZ << "\n";
-            //////////////////////////////////////////////
+            // write aoa from cache if USE_DUMMY
+            if (options && options->getOptionString().find("USE_DUMMY") != std::string::npos)
+            {
+                auto optionsString = options->getOptionString();
+                OSG_INFO << "Options: " << optionsString << std::endl;
 
-            fix_materials_visitor fix_mats_vis(mat_loader, fs::path(materials_file).parent_path().string());
-            osg_root.accept(fix_mats_vis);
+                std::string tesselateOption = "TESSELATE=";
+                if (auto tesselatePos = optionsString.find(tesselateOption); tesselatePos != std::string::npos) {
+                    std::istringstream is(optionsString.substr(tesselatePos + tesselateOption.size()));
 
-            // convert all textures to some format
-            //aurora::convert_textures_visitor texture_visitor("dds");
-            //osg_root.accept(texture_visitor);
-            //texture_visitor.write(osgDB::getFilePath(file_name));
+                    float tesselateParam;
+                    is >> tesselateParam;
 
-            aurora::aoa_writer file_writer(file_name);
-            lights_generation_visitor generate_lights_v(file_writer);
-            osg_root.accept(generate_lights_v);
-            generate_lights_v.generate_lights();
+                    OSG_INFO << "Splitting to size " << tesselateParam << std::endl;
+                    mesh_subdivider subdivider(); // TODO: use
+                }
 
-            // apply transforms from ancestor nodes to geometry
-            // optimizer will only do this for transform nodes whose data variance is STATIC so we set it here 
-            make_transforms_static_visitor make_tranforms_static;
-            osg_root.accept(make_tranforms_static);
+                write_processor wp;
+                reflect(wp, aoa);
+                std::ofstream(file_name) << wp.result();
+            } 
+            else
+            {
+                //////////////////////////////////////////////
+                // add transform
+                osg::ref_ptr<osg::MatrixTransform> transform = new osg::MatrixTransform(config.get_full_transform());
+                transform->addChild(const_cast<osg::Node*>(&node));
+                osg::Node& osg_root = *transform;
+                OSG_INFO << "flip Y and Z: " << config.flip_YZ << "\n";
+                //////////////////////////////////////////////
 
-            // remove leaf Transform nodes because otherwise the optimizer will not be able to flatten all transforms properly
-            remove_hanging_transforms_visitor remove_hanging_tv;
-            
-            do osg_root.accept(remove_hanging_tv);
-            while(remove_hanging_tv.remove_hanging_transforms());
+                fix_materials_visitor fix_mats_vis(mat_loader, fs::path(materials_file).parent_path().string());
+                osg_root.accept(fix_mats_vis);
 
-            // run the optimizer
-            osgUtil::Optimizer optimizer;
-            optimizer.optimize(&osg_root, osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS | (config.index_mesh ? osgUtil::Optimizer::INDEX_MESH : 0));
+                // convert all textures to some format
+                //aurora::convert_textures_visitor texture_visitor("dds");
+                //osg_root.accept(texture_visitor);
+                //texture_visitor.write(osgDB::getFilePath(file_name));
 
-            OSG_INFO << "Writing node to AOA file " << file_name << std::endl;
+                aurora::aoa_writer file_writer(file_name);
+                lights_generation_visitor generate_lights_v(file_writer);
+                osg_root.accept(generate_lights_v);
+                generate_lights_v.generate_lights();
 
-            aurora::write_aoa_visitor write_aoa_v(mat_loader, file_writer);
-            osg_root.accept(write_aoa_v);
-            write_aoa_v.write_aoa();
+                // apply transforms from ancestor nodes to geometry
+                // optimizer will only do this for transform nodes whose data variance is STATIC so we set it here 
+                make_transforms_static_visitor make_tranforms_static;
+                osg_root.accept(make_tranforms_static);
+
+                // remove leaf Transform nodes because otherwise the optimizer will not be able to flatten all transforms properly
+                remove_hanging_transforms_visitor remove_hanging_tv;
+
+                do osg_root.accept(remove_hanging_tv);
+                while (remove_hanging_tv.remove_hanging_transforms());
+
+                // run the optimizer
+                osgUtil::Optimizer optimizer;
+                optimizer.optimize(&osg_root, osgUtil::Optimizer::FLATTEN_STATIC_TRANSFORMS | (config.index_mesh ? osgUtil::Optimizer::INDEX_MESH : 0));
+
+                OSG_INFO << "Writing node to AOA file " << file_name << std::endl;
+
+                aurora::write_aoa_visitor write_aoa_v(mat_loader, file_writer);
+                osg_root.accept(write_aoa_v);
+                write_aoa_v.write_aoa();
 
 
-            // ======================= DEBUG OUTPUT ============================
-            //write_aoa_v.write_debug_obj_file(fs::path(file_name).replace_extension("obj").string());
-            //debug_utils::write_node(osg_root, fs::path(file_name).replace_extension("after.stripped.osg").string(), true);
-            // ==================================================================
+                // ======================= DEBUG OUTPUT ============================
+                //write_aoa_v.write_debug_obj_file(fs::path(file_name).replace_extension("obj").string());
+                //debug_utils::write_node(osg_root, fs::path(file_name).replace_extension("after.stripped.osg").string(), true);
+                // ==================================================================
+            }
         }
         catch(std::exception const& e)
         {
@@ -276,6 +310,10 @@ public:
     {
         return WriteResult(WriteResult::FILE_NOT_HANDLED);
     }
+
+private:
+    mutable aurora::refl::aurora_format aoa;
+    mutable std::string aoa_path;
 };
 
 // register with Registry to instantiate the above reader/writer.

@@ -74,7 +74,7 @@ struct node_context
 
         data_buffer_ = {content.begin(), content.end()};
 
-        build_vertex_arrays_cache(aoa);
+        build_vertex_arrays_cache();
         build_stateset_cache(aoa);
     }
 
@@ -181,7 +181,7 @@ struct node_context
         return {std::distance(data_buffer_description_.vaos.begin(), result), *result};
     }
 
-    void build_vertex_arrays_cache(refl::aurora_format aoa)
+    void build_vertex_arrays_cache()
     {
         auto const& root_node = root_node_;
         assert(root_node.controllers.object_param_controller);
