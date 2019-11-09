@@ -211,7 +211,7 @@ struct data_buffer
         };
 
         
-        struct vertex_format
+        struct  vertex_format
         {   
             struct vertex_attribute
             {

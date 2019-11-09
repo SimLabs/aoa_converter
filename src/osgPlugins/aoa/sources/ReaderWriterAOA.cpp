@@ -33,6 +33,7 @@
 #include "aurora_aoa_reader.h"
 #include "aurora_write_processor.h"
 #include "aurora_mesh_subdivider.h"
+#include "osg/ShapeDrawable"
 
 using namespace aurora;
 
@@ -118,9 +119,11 @@ public:
             return ReadResult(ReadResult::FILE_NOT_FOUND);
         else if (options && options->getOptionString().find("USE_DUMMY") != std::string::npos)
         {
-            aoa = read_aoa(file_name);
             aoa_path = file_name;
-            return new osg::Node;
+
+            auto dummy_res = new osg::Node;// new osg::Geode;
+            //dummy_res->addDrawable(new osg::ShapeDrawable(new osg::Sphere()));
+            return dummy_res;
         }
         else
         {
@@ -131,9 +134,9 @@ public:
                 auto optionsString = options->getOptionString();
                 OSG_INFO << "Options: " << optionsString << std::endl;
 
-                std::string tesselateOption = "TESSELATE=";
+                std::string tesselateOption = "TESSELATE";
                 if (auto tesselatePos = optionsString.find(tesselateOption); tesselatePos != std::string::npos) {
-                    std::istringstream is(optionsString.substr(tesselatePos + tesselateOption.size()));
+                    std::istringstream is(optionsString.substr(tesselatePos + tesselateOption.size() + 1));
 
                     float tesselateParam;
                     is >> tesselateParam;
@@ -181,23 +184,34 @@ public:
             argv.push_back("aoa-plugin");
             int argc = argv.size();
 
-            if(options)
+            if (options)
             {
-                using boost::tokenizer;
-                using boost::escaped_list_separator;
-                using so_tokenizer = tokenizer<escaped_list_separator<char>>;
+                const static char strip = '\'';
+                const static char sep = ',';
 
-                so_tokenizer tok(options->getOptionString(), escaped_list_separator<char>(','));
-                for(so_tokenizer::iterator beg = tok.begin(); beg != tok.end(); ++beg)
+                std::string option_string = options->getOptionString();
                 {
-                    split_opts.push_back(*beg);
+                    auto stripped_begin = option_string.find_first_not_of(strip);
+                    auto stripped_end = option_string.find_last_not_of(strip);
+                    option_string = option_string.substr(stripped_begin, stripped_end - stripped_begin + 1);
                 }
-                std::transform(begin(split_opts), end(split_opts), back_inserter(argv), [](auto& s){ return const_cast<char*>(s.data()); });
+
+                for (size_t offset = 0; offset < std::string::npos; ) {
+                    size_t next_sep = option_string.find_first_of(sep, offset);
+                    if (next_sep != std::string::npos && next_sep - offset > 0 || offset + 1 < option_string.size())
+                    {
+                        auto arg = option_string.substr(offset, next_sep - offset);
+                        char *next_arg = new char[arg.size() + 1];
+                        std::copy(arg.begin(), arg.end(), next_arg);
+                        next_arg[arg.size()] = '\0';
+                        argv.push_back(next_arg);
+                    }
+                    offset = next_sep == std::string::npos ? next_sep : next_sep + 1;
+                }
                 argc = argv.size();
             }
 
             osg::ArgumentParser arguments(&argc, argv.data());
-
 
             string materials_file;
             arguments.read("--aoa-materials-file", materials_file);
@@ -214,25 +228,27 @@ public:
             auto config = get_config(config_path);
 
             // write aoa from cache if USE_DUMMY
-            if (options && options->getOptionString().find("USE_DUMMY") != std::string::npos)
-            {
-                auto optionsString = options->getOptionString();
-                OSG_INFO << "Options: " << optionsString << std::endl;
+            if (arguments.read("USE_DUMMY"))
+            { 
+                if (float tesselate_param; arguments.read("TESSELATE", tesselate_param)) 
+                {
+                    OSG_INFO << "Splitting to size " << tesselate_param << std::endl;
+                    mesh_subdivider subdivider(aoa_path, tesselate_param);
 
-                std::string tesselateOption = "TESSELATE=";
-                if (auto tesselatePos = optionsString.find(tesselateOption); tesselatePos != std::string::npos) {
-                    std::istringstream is(optionsString.substr(tesselatePos + tesselateOption.size()));
+                    write_processor wp;
+                    reflect(wp, subdivider.processed_aoa());
+                    std::ofstream(file_name) << wp.result();
 
-                    float tesselateParam;
-                    is >> tesselateParam;
-
-                    OSG_INFO << "Splitting to size " << tesselateParam << std::endl;
-                    mesh_subdivider subdivider(); // TODO: use
+                    auto aod = subdivider.processed_aod();
+                    std::ofstream(
+                        fs::path(file_name).filename().replace_extension("aod").string(), 
+                        std::ios_base::binary | std::ios_base::out
+                    ).write(reinterpret_cast<char *>(aod.data()), aod.size());
+                } 
+                else
+                {
+                    throw std::logic_error("AOA to AOA conversion redundant: copy files instead ;)");
                 }
-
-                write_processor wp;
-                reflect(wp, aoa);
-                std::ofstream(file_name) << wp.result();
             } 
             else
             {
@@ -312,7 +328,6 @@ public:
     }
 
 private:
-    mutable aurora::refl::aurora_format aoa;
     mutable std::string aoa_path;
 };
 
