@@ -9,7 +9,7 @@ namespace aurora {
         using attr_mode_t = mesh_subdivider::vertex_format_t::vertex_attribute::mode_t;
 
         template<typename T>
-        uint32_t get_index(T *data);
+        uint32_t get_index(T *data); // TODO: delete?
 
         template<>
         uint32_t get_index<uint16_t>(uint16_t *data)
@@ -185,7 +185,7 @@ namespace aurora {
             converter_entry<attr_type_t::INT_2_10_10_10_REV,          packed_data_t  >()
         };
 
-        int vertex_format_stride(const mesh_subdivider::vertex_format_t &&vertex_format)
+        int vertex_format_stride(const mesh_subdivider::vertex_format_t &vertex_format)
         {
             int total = 0;
             for (auto &attribute : vertex_format.attributes)
@@ -195,12 +195,12 @@ namespace aurora {
                     total += type_to_size.at(attribute.type);
                 }
                 else
-                    total += type_to_size.at(attribute.type) * attribute.size;
+                    total += attribute.size * type_to_size.at(attribute.type);
 
             return total;
         }
 
-        int vertex_coordinate_attribute_index(const mesh_subdivider::vertex_format_t &&vertex_format)
+        int vertex_coordinate_attribute_index(const mesh_subdivider::vertex_format_t &vertex_format)
         {
             return 0; // TODO: anything better?
         }
@@ -224,15 +224,16 @@ namespace aurora {
                     result.emplace_back(attribute.size);
                     for (size_t i = 0; i < attribute.size; ++i) {
                         result.back().at(i) = float_converters.at(attribute.type)->from_binary(bytes);
+                        bytes += type_to_size.at(attribute.type);
                     }
-                    bytes += type_to_size.at(attribute.type) * attribute.size;
                 }
             }
 
             return result;
         }
 
-        geom::point_3f to_point_3f(const std::vector<float> &&coordinate_attribute) {
+
+        geom::point_3f to_point_3f(const std::vector<float> &coordinate_attribute) {
             assert(coordinate_attribute.size() == 3);
 
             return geom::point_3f(
@@ -250,7 +251,7 @@ namespace aurora {
         ) {
             assert(a_attributes.size() == b_attributes.size() && b_attributes.size() == vertex_format.attributes.size());
 
-            mesh_subdivider::vertex_attributes_t ab_attributes(vertex_format.attributes.size());
+            mesh_subdivider::vertex_attributes_t ab_attributes;
             
             for (size_t i = 0; i < vertex_format.attributes.size(); ++i)
             {
@@ -373,14 +374,21 @@ namespace aurora {
         const refl::node::mesh_t::mesh_face::mesh_face_offset_count_base_mat &face_info,
         face_data_t &output_face_data
     ) {
-        const auto short_index = aoa.buffer_data.vaos[vao_ref.vao_id].vertex_format_offset.format == 0xFFFF;
+        const auto& vao = aoa.buffer_data.vaos[vao_ref.vao_id];
+        const auto short_index = vao.vertex_format_offset.format == 0xFFFF;
         const auto index_size = short_index ? 2 : 4;
         auto &stream = root_node.controllers.object_param_controller->buffer.geometry_streams[vao_ref.geom_stream_id];
-        const auto indexes_begin = data_buffer_in.data() + stream.index_offset_size.offset + index_size * face_info.offset;
+        const auto indexes_begin = data_buffer_in.data()
+            + aoa.buffer_data.index_file_offset_size.offset
+            + stream.index_offset_size.offset
+            + index_size * face_info.offset;
         
         const vertex_format_t &vertex_format = aoa.buffer_data.vaos[vao_ref.vao_id].format;
-        const auto vertex_stride = attribute_operations::vertex_format_stride(std::forward<const vertex_format_t>(vertex_format));
-        const auto vertices_start = data_buffer_in.data() + stream.vertex_offset_size.offset;// +face_info.base_vertex * vertex_stride;
+        const auto vertex_stride = attribute_operations::vertex_format_stride(vertex_format);
+        const auto vertices_start = data_buffer_in.data()
+            + aoa.buffer_data.vertex_file_offset_size.offset
+            + stream.vertex_offset_size.offset
+            + face_info.base_vertex * vertex_stride;
 
         output_face_data.vertices.reserve(face_info.num_vertices);
         for (size_t i = 0; i < face_info.num_vertices; ++i)
@@ -390,9 +398,9 @@ namespace aurora {
         {
             for (unsigned i = 0; i < face_info.count; ++i)
             {
-                auto ia0 = attribute_operations::get_index(indexes_in_begin + 3 * i + 0);
-                auto ib0 = attribute_operations::get_index(indexes_in_begin + 3 * i + 1);
-                auto ic0 = attribute_operations::get_index(indexes_in_begin + 3 * i + 2);
+                auto ia0 = indexes_in_begin[3 * i + 0];
+                auto ib0 = indexes_in_begin[3 * i + 1];
+                auto ic0 = indexes_in_begin[3 * i + 2];
 
                 subdivide_triangle(vertex_format, output_face_data, ia0, ib0, ic0);
             }
@@ -413,7 +421,7 @@ namespace aurora {
     ) const {
         using namespace attribute_operations;
 
-        const auto vertex_coordinate_index = vertex_coordinate_attribute_index(std::forward<const vertex_format_t>(vertex_format));
+        const auto vertex_coordinate_index = vertex_coordinate_attribute_index(vertex_format);
 
         std::deque<std::tuple<vertex_index_t, vertex_index_t, vertex_index_t>> q;
         q.emplace_back(ia0, ib0, ic0);
@@ -423,9 +431,9 @@ namespace aurora {
             auto[ia, ib, ic] = q.front();
             q.pop_front();
 
-            geom::point_3f a = to_point_3f(std::forward<const std::vector<float>>(face_data.vertices.at(ia).attributes.at(vertex_coordinate_index)));
-            geom::point_3f b = to_point_3f(std::forward<const std::vector<float>>(face_data.vertices.at(ib).attributes.at(vertex_coordinate_index)));
-            geom::point_3f c = to_point_3f(std::forward<const std::vector<float>>(face_data.vertices.at(ic).attributes.at(vertex_coordinate_index)));
+            geom::point_3f a = to_point_3f(face_data.vertices.at(ia).attributes.at(vertex_coordinate_index));
+            geom::point_3f b = to_point_3f(face_data.vertices.at(ib).attributes.at(vertex_coordinate_index));
+            geom::point_3f c = to_point_3f(face_data.vertices.at(ic).attributes.at(vertex_coordinate_index));
 
             auto rotate_counter_clockwise = [&a, &b, &c, &ia, &ib, &ic]()
             {
@@ -517,6 +525,8 @@ namespace aurora {
             else
                 assert(stream_vao_mapping.at(stream_id) == vao_id);
 
+            const size_t vertex_stride = attribute_operations::vertex_format_stride(aoa.buffer_data.vaos.at(vao_id).format);
+
             face_data_t &face_data = stream_data[stream_id];
 
             auto &[mesh_info, mesh_face_data] = mesh_data;
@@ -539,9 +549,9 @@ namespace aurora {
                 if (auto &face_info = mesh_info.face_array[face_index].with_shadow_mat)
                 {
                     face_info->offset = index_offset;
-                    face_info->count = face_data.triangle_count;
-                    face_info->base_vertex = vertex_offset;
+                    face_info->base_vertex = vertex_offset * vertex_stride; // later add stream offset so we actually count from VAO start
                     face_info->num_vertices = face_data.vertices.size();
+                    face_info->count = face_info->num_vertices / 3;
                 }
             }
         }
@@ -560,11 +570,6 @@ namespace aurora {
         };
 
         add_to_end_in_out(0, 24); // fill header TODO: magic + sizes instead of just copying
-        for (auto &light_stream : root_node.controllers.object_param_controller->buffer.light_streams) // copy light streams
-        {
-            auto &[offset, size] = light_stream.light_offset_size;
-            offset = add_to_end_in_out(offset, size);
-        }
 
         // fill vertex file
         {
@@ -579,12 +584,12 @@ namespace aurora {
             {
                 auto &vao_info = aoa.buffer_data.vaos[vao_id];
 
-                vao_info.vertex_format_offset.offset = data_buffer_out.size(); // vao offset
+                vao_info.vertex_format_offset.offset = data_buffer_out.size() - vertex_offset; // vao offset
                 for (auto stream_id : stream_ids)
                 {
                     auto &geometry_stream = root_node.controllers.object_param_controller->buffer.geometry_streams[stream_id];
                     auto &[offset, size] = geometry_stream.vertex_offset_size;
-                    offset = data_buffer_out.size();
+                    offset = data_buffer_out.size() - vao_info.vertex_format_offset.offset;
                     for (auto &vertex : stream_data.at(stream_id).vertices)
                         vertex.to_byte_buffer(vao_info.format, data_buffer_out);
                     size = data_buffer_out.size() - offset;
@@ -598,7 +603,7 @@ namespace aurora {
         {
             auto &[index_offset, index_size] = aoa.buffer_data.index_file_offset_size;
             index_offset = data_buffer_out.size();
-            if (auto &collision_stream = root_node.controllers.object_param_controller->buffer.collision_stream) { // collision stream
+            if (auto &collision_stream = root_node.controllers.object_param_controller->buffer.collision_stream) { // collision stream TODO: needed?
                 auto &[offset, size] = collision_stream->index_offset_size;
                 offset = add_to_end_in_out(offset, size);
             }
@@ -624,18 +629,36 @@ namespace aurora {
                     {
                         std::vector<uint16_t> indexes_to_add;
                         std::copy(stream_indexes.begin(), stream_indexes.end(), std::back_inserter(indexes_to_add));
-                        offset = add_to_end(reinterpret_cast<uint8_t *>(indexes_to_add.data()), data_buffer_out, 0, size);
+                        offset = add_to_end(reinterpret_cast<uint8_t *>(indexes_to_add.data()), data_buffer_out, 0, size) - index_offset;
                     }
                     else
                     {
                         std::vector<uint32_t> indexes_to_add;
                         std::copy(stream_indexes.begin(), stream_indexes.end(), std::back_inserter(indexes_to_add));
-                        offset = add_to_end(reinterpret_cast<uint8_t *>(indexes_to_add.data()), data_buffer_out, 0, size);
+                        offset = add_to_end(reinterpret_cast<uint8_t *>(indexes_to_add.data()), data_buffer_out, 0, size) - index_offset;
                     }
                 }
             }
 
             index_size = data_buffer_out.size() - index_offset;
+        }
+
+        for (auto& [stream_vao_id, mesh_data] : data_cache.mesh_data) // fix face base_vertex values
+        {
+            auto& [stream_id, _1] = stream_vao_id;
+            const auto stream_offset = root_node.controllers.object_param_controller->buffer.geometry_streams.at(stream_id).vertex_offset_size.offset;
+
+            auto& [mesh_info, _2] = mesh_data;
+
+            for (auto& face_index : mesh_info.face_array)
+                if (auto& face_info = face_index.with_shadow_mat)
+                    face_info->base_vertex += stream_offset;
+        }
+
+        for (auto& light_stream : root_node.controllers.object_param_controller->buffer.light_streams) // copy light streams TODO: needed?
+        {
+            auto& [offset, size] = light_stream.light_offset_size;
+            offset = add_to_end_in_out(offset, size);
         }
     }
 

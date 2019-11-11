@@ -240,10 +240,10 @@ public:
                     std::ofstream(file_name) << wp.result();
 
                     auto aod = subdivider.processed_aod();
-                    std::ofstream(
-                        fs::path(file_name).filename().replace_extension("aod").string(), 
-                        std::ios_base::binary | std::ios_base::out
-                    ).write(reinterpret_cast<char *>(aod.data()), aod.size());
+
+                    auto data_file_name = fs::path(file_name).replace_extension("aod").string();
+                    std::ofstream(data_file_name, std::ios_base::binary | std::ios_base::out
+                    ).write(reinterpret_cast<char *>(aod.data()), aod.size()).flush();
                 } 
                 else
                 {

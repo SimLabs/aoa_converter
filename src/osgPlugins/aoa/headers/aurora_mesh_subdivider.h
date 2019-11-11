@@ -57,7 +57,7 @@ private:
 
     void subdivide_mesh_face(const refl::node::mesh_t::mesh_vao_ref &, const refl::node::mesh_t::mesh_face::mesh_face_offset_count_base_mat &, face_data_t &);
     
-    void mesh_subdivider::subdivide_triangle(
+    void subdivide_triangle(
         const vertex_format_t &vertex_format,
         face_data_t &face_data,
         const vertex_index_t ia0, const vertex_index_t ib0, const vertex_index_t ic0
