@@ -18,22 +18,17 @@
 
 #include "write_aoa_visitor.h"
 #include "aurora_aoa_writer.h"
-#include "convert_textures_visitor.h"
 #include "tesselate_visitor.h"
 #include "fix_materials_visitor.h"
 #include "lights_generation_visitor.h"
 #include "material_loader.h"
-#include "debug_utils.h"
 #include "plugin_config.h"
-#include "aoa_to_osg.h"
+// #include "aoa_to_osg.h"
 
 #include <filesystem>
 #include <thread>
-#include "osgUtil/Tessellator"
-#include "aurora_aoa_reader.h"
 #include "aurora_write_processor.h"
 #include "aurora_mesh_subdivider.h"
-#include "osg/ShapeDrawable"
 
 using namespace aurora;
 
@@ -121,11 +116,9 @@ public:
         {
             aoa_path = file_name;
 
-            auto dummy_res = new osg::Node;// new osg::Geode;
-            //dummy_res->addDrawable(new osg::ShapeDrawable(new osg::Sphere()));
-            return dummy_res;
+            return new osg::Node;
         }
-        else
+        /*else
         {
             auto osg_root = aoa_to_osg(file_name);
             if(!osg_root) return osg_root;
@@ -153,7 +146,7 @@ public:
             //texture_visitor.write(osgDB::getFilePath(file_name));
 
             return osg_root;
-        }
+        }*/
     }
 
     ReadResult readNode(std::istream& /*fin*/, const Options* /*options*/) const override
@@ -241,8 +234,9 @@ public:
 
                     auto aod = subdivider.processed_aod();
 
-                    auto data_file_name = fs::path(file_name).replace_extension("aod").string();
-                    std::ofstream(data_file_name, std::ios_base::binary | std::ios_base::out
+                    std::ofstream(
+                        fs::path(file_name).replace_extension("aod").string(), 
+                        std::ios_base::binary | std::ios_base::out
                     ).write(reinterpret_cast<char *>(aod.data()), aod.size()).flush();
                 } 
                 else
@@ -301,18 +295,18 @@ public:
                 // ==================================================================
             }
         }
-        catch(std::exception const& e)
-        {
-            return WriteResult(string("AOA plugin: ") + e.what());
-        }
+        //catch(std::exception const& e)
+        //{
+        //    return WriteResult(string("AOA plugin: ") + e.what());
+        //}
         catch(const char* e)
         {
             return WriteResult(string("AOA plugin: ") + e);
         }
-        catch(...)
-        {
-            return WriteResult("AOA plugin: caught unknown exception");
-        }
+        //catch(...)
+        //{
+        //    return WriteResult("AOA plugin: caught unknown exception");
+        //}
 
         return WriteResult(WriteResult::FILE_SAVED);
     }

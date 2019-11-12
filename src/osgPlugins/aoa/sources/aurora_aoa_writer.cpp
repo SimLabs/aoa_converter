@@ -314,7 +314,8 @@ aoa_writer::node_ptr aoa_writer::node::add_mesh_spec(geom::rectangle_3f bbox, un
     mesh.vao_ref.geom_stream_id = vao_ref.first;
     mesh.vao_ref.vao_id = vao_ref.second;
 
-    mesh.bbox.rect = bbox;
+    if (mesh.bbox)
+        mesh.bbox->rect = bbox;
 
     mesh.face_array.push_back(mesh_geom);
 

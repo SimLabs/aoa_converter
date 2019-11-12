@@ -1,6 +1,8 @@
 #include "aurora_mesh_subdivider.h"
-#include "geometry/half.h"
 #include "aurora_aoa_reader.h"
+#include "packed.h"
+#include "geometry/primitives/point.h"
+#include "geometry/primitives/quaternion.h"
 
 namespace aurora {
     namespace attribute_operations
@@ -173,7 +175,7 @@ namespace aurora {
 
         const static std::map<attr_type_t, const base_attribute_converter<float> *> float_converters {
             converter_entry<attr_type_t::FLOAT, float>(),
-            converter_entry<attr_type_t::HALF_FLOAT, geom::half>(),
+            converter_entry<attr_type_t::HALF_FLOAT, half_float>(),
             converter_entry<attr_type_t::UNSIGNED_INT, uint32_t>(),
             converter_entry<attr_type_t::INT, int32_t>(),
             converter_entry<attr_type_t::UNSIGNED_BYTE, uint8_t>(),
@@ -262,8 +264,44 @@ namespace aurora {
                 assert(a_attribute.size() == attribute.size && b_attribute.size() == attribute.size);
 
                 ab_attributes.emplace_back(attribute.size);
-                for (size_t j = 0; j < attribute.size; ++j) // TODO: slerp for vectors and all
-                    ab_attributes.back().at(j) = geom::blend(a_attribute.at(j), b_attribute.at(j), alpha);
+                if (attribute.mode == attr_mode_t::ATTR_MODE_PACKED)
+                {
+                    geom::point_4f a(a_attribute.at(0), a_attribute.at(1), a_attribute.at(2), a_attribute.at(3));
+                    normalize(a);
+
+                    geom::point_4f b(b_attribute.at(0), b_attribute.at(1), b_attribute.at(2), b_attribute.at(3));
+                    normalize(b);
+
+                    geom::point_4f ab;
+
+                    float dot = a.x * b.x + a.y * b.y + a.z * b.z;
+
+                    /*
+                    dot = cos(theta)
+                    if (dot < 0), v1 and v2 are more than 90 degrees apart,
+                    so we can invert one to reduce spinning
+                    */
+
+                    if (dot < 0.95)
+                    {
+                        const auto angle = acos(dot);
+                        const auto sin_angle = sin(angle);
+                        const auto sin_angle_alpha = sin(angle * alpha);
+                        const auto sin_angle_inv_alpha = sin(angle * (1 - alpha));
+
+                        ab = (a * sin_angle_inv_alpha + b * sin_angle_alpha) / sin_angle;
+                    }
+                    else
+                        // if the angle is small, use linear interpolation
+                        ab = geom::blend(a, b, alpha);
+                    normalize(ab);
+
+                    ab_attributes.back() = { ab.x, ab.y, ab.z, ab.w };
+
+                }
+                else
+                    for (size_t j = 0; j < attribute.size; ++j) // TODO: slerp for vectors and all
+                        ab_attributes.back().at(j) = geom::blend(a_attribute.at(j), b_attribute.at(j), alpha);
             }
 
             return ab_attributes;
@@ -315,7 +353,7 @@ namespace aurora {
 
     static refl::node &get_node(refl::aurora_format &aoa, std::string &&name)
     {
-        static auto compare_case_insensitive = [](auto &&a, auto &&b) noexcept
+        const auto compare_case_insensitive = [](auto &&a, auto &&b) noexcept
         {
             return a.size() == b.size()
                 && std::equal(a.begin(), a.end(), b.begin(), [](char &c1, char &c2) {
@@ -358,7 +396,7 @@ namespace aurora {
                 size_t face_index = 0;
                 for (auto &mesh_face : mesh->face_array) {
                     if (auto &face_info = mesh_face.with_shadow_mat)
-                        subdivide_mesh_face(mesh->vao_ref, face_info.value(), face_data[face_index]);
+                        subdivide_mesh_face(mesh->vao_ref, face_info.value(), face_data.at(face_index));
                     ++face_index;
                 }
 
@@ -374,28 +412,30 @@ namespace aurora {
         const refl::node::mesh_t::mesh_face::mesh_face_offset_count_base_mat &face_info,
         face_data_t &output_face_data
     ) {
-        const auto& vao = aoa.buffer_data.vaos[vao_ref.vao_id];
+        const auto& vao = aoa.buffer_data.vaos.at(vao_ref.vao_id);
         const auto short_index = vao.vertex_format_offset.format == 0xFFFF;
         const auto index_size = short_index ? 2 : 4;
         auto &stream = root_node.controllers.object_param_controller->buffer.geometry_streams[vao_ref.geom_stream_id];
         const auto indexes_begin = data_buffer_in.data()
             + aoa.buffer_data.index_file_offset_size.offset
-            + stream.index_offset_size.offset
+            //+ stream.index_offset_size.offset
             + index_size * face_info.offset;
         
         const vertex_format_t &vertex_format = aoa.buffer_data.vaos[vao_ref.vao_id].format;
         const auto vertex_stride = attribute_operations::vertex_format_stride(vertex_format);
         const auto vertices_start = data_buffer_in.data()
             + aoa.buffer_data.vertex_file_offset_size.offset
-            + stream.vertex_offset_size.offset
-            + face_info.base_vertex * vertex_stride;
+            + vao.vertex_format_offset.offset
+            + face_info.base_vertex
+            - stream.vertex_offset_size.offset;
 
         output_face_data.vertices.reserve(face_info.num_vertices);
         for (size_t i = 0; i < face_info.num_vertices; ++i)
             output_face_data.vertices.emplace_back(vertex_format, vertices_start + i * vertex_stride);
-        
-        static auto subdivide_face_triangles = [&face_info, &vertex_format, &output_face_data, this](const auto indexes_in_begin)
+
+        const auto subdivide_face_triangles = [&face_info, &vertex_format, &output_face_data, this](const auto indexes_in_begin)
         {
+            const auto prev_index_count = output_face_data.indexes.size();
             for (unsigned i = 0; i < face_info.count; ++i)
             {
                 auto ia0 = indexes_in_begin[3 * i + 0];
@@ -404,6 +444,7 @@ namespace aurora {
 
                 subdivide_triangle(vertex_format, output_face_data, ia0, ib0, ic0);
             }
+            OSG_INFO << face_info.count << " -> " << (output_face_data.indexes.size() - prev_index_count) / 3 << " triangles\n";
         };
 
         if (short_index)
@@ -412,7 +453,7 @@ namespace aurora {
             subdivide_face_triangles(reinterpret_cast<uint32_t *>(indexes_begin));
     }
 
-    const static float EPS = 1e-3f;
+    const static float EPS = 1e-2f;
     
     void mesh_subdivider::subdivide_triangle(
         const vertex_format_t &vertex_format, 
@@ -447,8 +488,8 @@ namespace aurora {
                 rotate_counter_clockwise();
 
             bool found = false;
-            for (int rotations = 0; rotations < 2 && !found; ++rotations) {
-                if (over_the_edge(a.x, b.x) || over_the_edge(a.y, b.y) || over_the_edge(a.z, b.z))
+            for (int rotations = 0; rotations < 3 && !found; ++rotations) {
+                if (over_the_edge(a.x, b.x) || over_the_edge(a.y, b.y))// || over_the_edge(a.z, b.z))
                 {
                     float alpha = 1.0f;
                     auto is_better_alpha = [&alpha](float new_alpha)
@@ -460,20 +501,20 @@ namespace aurora {
                         alpha = alpha_x;
                     if (const float alpha_y = get_alpha(a.y, b.y); is_better_alpha(alpha_y))
                         alpha = alpha_y;
-                    if (const float alpha_z = get_alpha(a.z, b.z); is_better_alpha(alpha_z))
-                        alpha = alpha_z;
+                    //if (const float alpha_z = get_alpha(a.z, b.z); is_better_alpha(alpha_z))
+                    //    alpha = alpha_z;
 
                     if (EPS < alpha && alpha < 1 - EPS)
                     {
                         const vertex_index_t iab = face_data.vertices.size();
-
-                        face_data.vertices.emplace_back(interpolate_vertex_attributes(
+                        auto ab = interpolate_vertex_attributes(
                             vertex_format,
                             face_data.vertices.at(ia).attributes,
                             face_data.vertices.at(ib).attributes,
                             alpha
-                        ));
-
+                        );
+                        
+                        face_data.vertices.emplace_back(std::move(ab));
                         q.emplace_back(ic, ia, iab);
                         q.emplace_back(ib, ic, iab);
                         found = true;
@@ -506,7 +547,7 @@ namespace aurora {
     bool mesh_subdivider::over_the_edge(const float a, const float b) const
     {
         const float border = get_border(a, b);
-        return a < border - EPS && border + EPS < b || b < border - EPS && border + EPS < a;
+        return abs(a - b) >= EPS && (a < border - EPS && border + EPS < b || b < border - EPS && border + EPS < a);
     }
 
     void mesh_subdivider::fill_processed_data() // filling output data buffer and updating aoa
@@ -548,10 +589,10 @@ namespace aurora {
 
                 if (auto &face_info = mesh_info.face_array[face_index].with_shadow_mat)
                 {
-                    face_info->offset = index_offset;
+                    face_info->offset = index_offset;                       
                     face_info->base_vertex = vertex_offset * vertex_stride; // later add stream offset so we actually count from VAO start
                     face_info->num_vertices = face_data.vertices.size();
-                    face_info->count = face_info->num_vertices / 3;
+                    face_info->count = face_data.indexes.size() / 3;
                 }
             }
         }
@@ -571,37 +612,15 @@ namespace aurora {
 
         add_to_end_in_out(0, 24); // fill header TODO: magic + sizes instead of just copying
 
-        // fill vertex file
+        for (auto& light_stream : root_node.controllers.object_param_controller->buffer.light_streams) // copy light streams TODO: needed?
         {
-            auto &[vertex_offset, vertex_size] = aoa.buffer_data.vertex_file_offset_size;
-            vertex_offset = data_buffer_out.size();
-            if (auto &collision_stream = root_node.controllers.object_param_controller->buffer.collision_stream) { // collision stream
-                auto &[offset, size] = collision_stream->vertex_offset_size;
-                offset = add_to_end_in_out(offset, size);
-            }
-
-            for (auto &[vao_id, stream_ids] : vao_stream_mapping) // filling vao vertex info
-            {
-                auto &vao_info = aoa.buffer_data.vaos[vao_id];
-
-                vao_info.vertex_format_offset.offset = data_buffer_out.size() - vertex_offset; // vao offset
-                for (auto stream_id : stream_ids)
-                {
-                    auto &geometry_stream = root_node.controllers.object_param_controller->buffer.geometry_streams[stream_id];
-                    auto &[offset, size] = geometry_stream.vertex_offset_size;
-                    offset = data_buffer_out.size() - vao_info.vertex_format_offset.offset;
-                    for (auto &vertex : stream_data.at(stream_id).vertices)
-                        vertex.to_byte_buffer(vao_info.format, data_buffer_out);
-                    size = data_buffer_out.size() - offset;
-                }
-            }
-
-            vertex_size = data_buffer_out.size() - vertex_offset;
+            auto&[offset, size] = light_stream.light_offset_size;
+            offset = add_to_end_in_out(offset, size);
         }
 
         // fill index file
+        auto &[index_offset, index_size] = aoa.buffer_data.index_file_offset_size;
         {
-            auto &[index_offset, index_size] = aoa.buffer_data.index_file_offset_size;
             index_offset = data_buffer_out.size();
             if (auto &collision_stream = root_node.controllers.object_param_controller->buffer.collision_stream) { // collision stream TODO: needed?
                 auto &[offset, size] = collision_stream->index_offset_size;
@@ -643,22 +662,45 @@ namespace aurora {
             index_size = data_buffer_out.size() - index_offset;
         }
 
-        for (auto& [stream_vao_id, mesh_data] : data_cache.mesh_data) // fix face base_vertex values
+        // fill vertex file
         {
-            auto& [stream_id, _1] = stream_vao_id;
-            const auto stream_offset = root_node.controllers.object_param_controller->buffer.geometry_streams.at(stream_id).vertex_offset_size.offset;
+            auto &[vertex_offset, vertex_size] = aoa.buffer_data.vertex_file_offset_size;
+            vertex_offset = data_buffer_out.size();
+            if (auto &collision_stream = root_node.controllers.object_param_controller->buffer.collision_stream) { // collision stream
+                auto &[offset, size] = collision_stream->vertex_offset_size;
+                offset = add_to_end_in_out(offset, size);
+            }
 
-            auto& [mesh_info, _2] = mesh_data;
+            for (auto &[vao_id, stream_ids] : vao_stream_mapping) // filling vao vertex info
+            {
+                auto &vao_info = aoa.buffer_data.vaos[vao_id];
+
+                vao_info.vertex_format_offset.offset = data_buffer_out.size() - vertex_offset + index_size; // vao offset
+                for (auto stream_id : stream_ids)
+                {
+                    auto &geometry_stream = root_node.controllers.object_param_controller->buffer.geometry_streams[stream_id];
+                    auto &[offset, size] = geometry_stream.vertex_offset_size;
+                    offset = data_buffer_out.size() - vertex_offset;
+                    for (auto &vertex : stream_data.at(stream_id).vertices)
+                        vertex.to_byte_buffer(vao_info.format, data_buffer_out);
+                    size = data_buffer_out.size() - vertex_offset - offset;
+                }
+            }
+
+            vertex_size = data_buffer_out.size() - vertex_offset;
+        }
+
+        for (auto& [stream_vao_id, mesh_data] : data_cache.mesh_data) // fix face offset values
+        {
+            auto& [stream_id, vao_id] = stream_vao_id;
+            const auto &stream = root_node.controllers.object_param_controller->buffer.geometry_streams.at(stream_id);
+            const auto stream_vertex_offset = stream.vertex_offset_size.offset;
+
+            auto& [mesh_info, unused2] = mesh_data;
 
             for (auto& face_index : mesh_info.face_array)
                 if (auto& face_info = face_index.with_shadow_mat)
-                    face_info->base_vertex += stream_offset;
-        }
-
-        for (auto& light_stream : root_node.controllers.object_param_controller->buffer.light_streams) // copy light streams TODO: needed?
-        {
-            auto& [offset, size] = light_stream.light_offset_size;
-            offset = add_to_end_in_out(offset, size);
+                    face_info->base_vertex += stream_vertex_offset;
         }
     }
 

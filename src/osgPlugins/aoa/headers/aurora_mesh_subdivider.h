@@ -60,7 +60,7 @@ private:
     void subdivide_triangle(
         const vertex_format_t &vertex_format,
         face_data_t &face_data,
-        const vertex_index_t ia0, const vertex_index_t ib0, const vertex_index_t ic0
+        vertex_index_t ia0, vertex_index_t ib0, vertex_index_t ic0
     ) const;
 
     float get_border(float a, float b) const;

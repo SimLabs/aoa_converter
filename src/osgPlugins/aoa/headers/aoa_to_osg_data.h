@@ -1,7 +1,6 @@
 #pragma once
 
 #include "aurora_format.h"
-#include "packed.h"
 #include "geometry/half.h"
 #include <osg/Array>
 

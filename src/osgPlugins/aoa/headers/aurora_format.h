@@ -384,7 +384,7 @@ struct node
         vector<mesh_face> face_array;
         mesh_vao_ref vao_ref;
         mesh_bsphere bsphere;
-        mesh_bbox    bbox;
+        optional<mesh_bbox> bbox;
 
         REFL_INNER(mesh_t)
             REFL_ENTRY_NAMED(vao_ref, Field__MESH_VAO_REF)
@@ -702,7 +702,7 @@ struct node
     {
         optional<offset_size> omni_offset_size;
         optional<offset_size> spot_offset_size;
-        unsigned              clazz = 0;
+        optional<unsigned>    clazz = 0;
 
         REFL_INNER(lightpoint2)
             REFL_ENTRY_NAMED(omni_offset_size, Field__OMNI)

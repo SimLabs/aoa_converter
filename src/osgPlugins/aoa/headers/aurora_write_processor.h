@@ -6,11 +6,22 @@
 namespace aurora
 {
 
+static void set_floating_point_precision(std::ostream &o)
+{
+    o.precision(7);
+    o.setf(std::ios::fixed, std::ios::floatfield);
+}
+
 namespace detail
 {
 
 struct flat_struct_processor
 {
+    flat_struct_processor()
+    {
+        set_floating_point_precision(out_);
+    }
+
     template<class Type>
     void operator()(Type& value, const char* key, std::enable_if_t<is_leaf_type_v<Type>>* = nullptr)
     {
@@ -54,8 +65,9 @@ string serialize_flat(T&& v)
 struct write_processor
 {
     write_processor()
-        : out_()
-    {}
+    {
+        set_floating_point_precision(out_);
+    }
 
     void operator()(refl::quoted_string const& value, const char* key)
     {
@@ -67,9 +79,11 @@ struct write_processor
     void operator()(Type const& value, const char* key, std::enable_if_t<is_leaf_type_v<Type>>* = nullptr)
     {
         std::ostringstream ss;
+        set_floating_point_precision(ss);
+
         ss << value;
         auto value_str = ss.str();
-        if(value_str.size())
+        if(!value_str.empty())
             out_ << indent_ << key << " " << value_str << std::endl;
         else
             out_ << indent_ << key << std::endl;
