@@ -263,7 +263,7 @@ template<uint Rbits, uint Gbits, uint Bbits, uint Abits> uint uf4_to_uint(const 
 	return p;
 }
 
-uint uf4_to_packed111110(const float4& v)
+inline uint uf4_to_packed111110(const float4& v)
 {
 	const v4f scale = xmm_set_4f(2047., 2047., 1023., 0.0);
 
@@ -276,7 +276,7 @@ uint uf4_to_packed111110(const float4& v)
 	return p;
 }
 
-template<> uint uf4_to_uint<8, 8, 8, 8>(const float4& v)
+template<> inline uint uf4_to_uint<8, 8, 8, 8>(const float4& v)
 {
 	v4f t = _mm_mul_ps(v.xmm, _mm_set1_ps(255.0f));
 	v4i i = _mm_cvtps_epi32(t);
@@ -285,7 +285,7 @@ template<> uint uf4_to_uint<8, 8, 8, 8>(const float4& v)
 	return _mm_cvtsi128_si32(i);
 }
 
-uint uf2_to_uint1616(float x, float y)
+inline uint uf2_to_uint1616(float x, float y)
 {
 	v4f t = xmm_set_4f(x, y, 0.0f, 0.0f);
 	t = _mm_mul_ps(t, _mm_set1_ps(65535.0f));
@@ -297,7 +297,7 @@ uint uf2_to_uint1616(float x, float y)
 	return p;
 }
 
-uint uf3_to_packed111110(const float3& v)
+inline uint uf3_to_packed111110(const float3& v)
 {
 	DEBUG_Assert( v.x >= 0.0f && v.y >= 0.0f && v.z >= 0.0f );
 
@@ -343,7 +343,7 @@ template<uint Rbits, uint Gbits, uint Bbits, uint Abits> uint sf4_to_int(const f
 	return p;
 }
 
-template<> uint sf4_to_int<8, 8, 8, 8>(const float4& v)
+template<> inline uint sf4_to_int<8, 8, 8, 8>(const float4& v)
 {
 	v4f t = _mm_mul_ps(v.xmm, _mm_set1_ps(127.0f));
 	v4i i = _mm_cvtps_epi32(t);
@@ -352,7 +352,7 @@ template<> uint sf4_to_int<8, 8, 8, 8>(const float4& v)
 	return _mm_cvtsi128_si32(i);
 }
 
-uint sf2_to_int1616(float x, float y)
+inline uint sf2_to_int1616(float x, float y)
 {
 	v4f t = xmm_set_4f(x, y, 0.0f, 0.0f);
 	t = _mm_mul_ps(t, _mm_set1_ps(32767.0f));
@@ -365,7 +365,7 @@ uint sf2_to_int1616(float x, float y)
 	return p;
 }
 
-uint sf2_to_h2(float x, float y)
+inline uint sf2_to_h2(float x, float y)
 {
 	#if( ENGINE_INTRINSIC >= ENGINE_INTRINSIC_AVX1 )
 
@@ -384,7 +384,7 @@ uint sf2_to_h2(float x, float y)
 	return r;
 }
 
-void sf4_to_h4(const float4& v, uint* pu2)
+inline void sf4_to_h4(const float4& v, uint* pu2)
 {
 	#if( ENGINE_INTRINSIC >= ENGINE_INTRINSIC_AVX1 )
 
@@ -425,7 +425,7 @@ template<uint Rbits, uint Gbits, uint Bbits, uint Abits> float4 uint_to_uf4(uint
 	return t;
 }
 
-template<> float4 uint_to_uf4<8, 8, 8, 8>(uint p)
+template<> inline float4 uint_to_uf4<8, 8, 8, 8>(uint p)
 {
 	#if( ENGINE_INTRINSIC >= ENGINE_INTRINSIC_SSE4 )
 		v4i i = _mm_cvtepu8_epi32(_mm_cvtsi32_si128(p));
@@ -439,7 +439,7 @@ template<> float4 uint_to_uf4<8, 8, 8, 8>(uint p)
 	return t;
 }
 
-float3 packed111110_to_uf3(uint p)
+inline float3 packed111110_to_uf3(uint p)
 {
 	float3 v;
 	v.x = FromPacked<UF11_M_BITS, UF11_E_BITS, UF11_S_MASK>( p & ((1 << 11) - 1) );
@@ -505,7 +505,7 @@ template<uint Rbits, uint Gbits, uint Bbits, uint Abits> float4 int_to_sf4(uint 
 	return t;
 }
 
-template<> float4 int_to_sf4<8, 8, 8, 8>(uint p)
+template<> inline float4 int_to_sf4<8, 8, 8, 8>(uint p)
 {
 	#if( ENGINE_INTRINSIC >= ENGINE_INTRINSIC_SSE4 )
 		v4i i = _mm_cvtepi8_epi32(_mm_cvtsi32_si128(p));
@@ -520,7 +520,7 @@ template<> float4 int_to_sf4<8, 8, 8, 8>(uint p)
 	return t;
 }
 
-float2 h2_to_sf2(uint ui)
+inline float2 h2_to_sf2(uint ui)
 {
 	float2 r;
 
@@ -541,7 +541,7 @@ float2 h2_to_sf2(uint ui)
 	return r;
 }
 
-float4 h4_to_sf4(const uint* pu2)
+inline float4 h4_to_sf4(const uint* pu2)
 {
 	float4 f;
 
@@ -598,7 +598,7 @@ struct half_float
 {
 	ushort us;
 
-	half_float()
+    half_float()
 	{
 	}
 

@@ -2,6 +2,7 @@
 #include "aurora_format.h"
 
 #include <filesystem>
+#include <optional>
 
 namespace aurora
 {
@@ -51,6 +52,7 @@ private:
 
     data_cache_t data_cache;
     std::vector<uint8_t> data_buffer_in, data_buffer_out;
+    std::map<std::tuple<vertex_index_t, vertex_index_t, float>, vertex_index_t> split_vertex_cache;
     
     void subdivide();
     void fill_processed_data();
@@ -61,11 +63,11 @@ private:
         const vertex_format_t &vertex_format,
         face_data_t &face_data,
         vertex_index_t ia0, vertex_index_t ib0, vertex_index_t ic0
-    ) const;
+    );
 
-    float get_border(float a, float b) const;
-    float get_alpha(float a, float b) const;
-    bool over_the_edge(float a, float b) const;
+    vertex_index_t split_vertex(const vertex_format_t &vertex_format, face_data_t &face_data, vertex_index_t ia, vertex_index_t ib, float alpha);
+
+    std::optional<float> get_split_point(float a, float b) const;
 };
 
 }

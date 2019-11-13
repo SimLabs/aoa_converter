@@ -23,7 +23,7 @@
 #include "lights_generation_visitor.h"
 #include "material_loader.h"
 #include "plugin_config.h"
-// #include "aoa_to_osg.h"
+#include "aoa_to_osg.h"
 
 #include <filesystem>
 #include <thread>
@@ -118,7 +118,7 @@ public:
 
             return new osg::Node;
         }
-        /*else
+        else
         {
             auto osg_root = aoa_to_osg(file_name);
             if(!osg_root) return osg_root;
@@ -146,7 +146,7 @@ public:
             //texture_visitor.write(osgDB::getFilePath(file_name));
 
             return osg_root;
-        }*/
+        }
     }
 
     ReadResult readNode(std::istream& /*fin*/, const Options* /*options*/) const override

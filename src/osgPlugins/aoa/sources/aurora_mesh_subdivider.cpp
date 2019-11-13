@@ -1,8 +1,7 @@
 #include "aurora_mesh_subdivider.h"
 #include "aurora_aoa_reader.h"
 #include "packed.h"
-#include "geometry/primitives/point.h"
-#include "geometry/primitives/quaternion.h"
+#include <optional>
 
 namespace aurora {
     namespace attribute_operations
@@ -172,6 +171,8 @@ namespace aurora {
         {
             return std::make_pair(Type, new packed_attribute_converter<Type, Inner>);
         }
+
+        static_assert(sizeof(half_float) == 2);
 
         const static std::map<attr_type_t, const base_attribute_converter<float> *> float_converters {
             converter_entry<attr_type_t::FLOAT, float>(),
@@ -425,9 +426,7 @@ namespace aurora {
         const auto vertex_stride = attribute_operations::vertex_format_stride(vertex_format);
         const auto vertices_start = data_buffer_in.data()
             + aoa.buffer_data.vertex_file_offset_size.offset
-            + vao.vertex_format_offset.offset
-            + face_info.base_vertex
-            - stream.vertex_offset_size.offset;
+            + stream.vertex_offset_size.offset;
 
         output_face_data.vertices.reserve(face_info.num_vertices);
         for (size_t i = 0; i < face_info.num_vertices; ++i)
@@ -447,25 +446,45 @@ namespace aurora {
             OSG_INFO << face_info.count << " -> " << (output_face_data.indexes.size() - prev_index_count) / 3 << " triangles\n";
         };
 
+        split_vertex_cache.clear();
         if (short_index)
             subdivide_face_triangles(reinterpret_cast<uint16_t *>(indexes_begin));
         else
             subdivide_face_triangles(reinterpret_cast<uint32_t *>(indexes_begin));
     }
 
-    const static float EPS = 1e-2f;
+    const static float EPS = 1e-3f;
+
+    mesh_subdivider::vertex_index_t mesh_subdivider::split_vertex(
+        const vertex_format_t &vertex_format, face_data_t &face_data,
+        const vertex_index_t ia, const vertex_index_t ib, const float alpha)
+    {
+        if (const auto it = split_vertex_cache.find({ ia, ib, alpha }); it != split_vertex_cache.end())
+            return it->second;
+
+        const auto index = face_data.vertices.size();
+        auto ab = attribute_operations::interpolate_vertex_attributes(
+            vertex_format,
+            face_data.vertices.at(ia).attributes,
+            face_data.vertices.at(ib).attributes,
+            alpha
+        );
+        face_data.vertices.emplace_back(std::move(ab));
+
+        split_vertex_cache.emplace(std::make_tuple(ia, ib, alpha), index);
+        return index;
+    };
     
     void mesh_subdivider::subdivide_triangle(
         const vertex_format_t &vertex_format, 
         face_data_t &face_data, 
         const vertex_index_t ia0, const vertex_index_t ib0, const vertex_index_t ic0
-    ) const {
+    ) {
         using namespace attribute_operations;
 
         const auto vertex_coordinate_index = vertex_coordinate_attribute_index(vertex_format);
 
-        std::deque<std::tuple<vertex_index_t, vertex_index_t, vertex_index_t>> q;
-        q.emplace_back(ia0, ib0, ic0);
+        std::deque<std::tuple<vertex_index_t, vertex_index_t, vertex_index_t>> q = { { ia0, ib0, ic0 } };
 
         while (!q.empty())
         {
@@ -476,7 +495,7 @@ namespace aurora {
             geom::point_3f b = to_point_3f(face_data.vertices.at(ib).attributes.at(vertex_coordinate_index));
             geom::point_3f c = to_point_3f(face_data.vertices.at(ic).attributes.at(vertex_coordinate_index));
 
-            auto rotate_counter_clockwise = [&a, &b, &c, &ia, &ib, &ic]()
+            const auto rotate_ccw = [&a, &b, &c, &ia, &ib, &ic]()
             {
                 std::swap(ia, ib);
                 std::swap(ic, ib);
@@ -484,70 +503,74 @@ namespace aurora {
                 std::swap(c, b);
             };
 
-            while (distance_sqr(a, b) < std::max(distance_sqr(a, c), distance_sqr(b, c)))
-                rotate_counter_clockwise();
-
-            bool found = false;
-            for (int rotations = 0; rotations < 3 && !found; ++rotations) {
-                if (over_the_edge(a.x, b.x) || over_the_edge(a.y, b.y))// || over_the_edge(a.z, b.z))
+            const auto try_split = [&, this](auto coord, const bool is_min)
+            {            
+                while (is_min ? coord(a) > std::min(coord(b), coord(c)) : coord(a) < std::max(coord(b), coord(c)))
+                    rotate_ccw();                                              
+                                                                               
+                std::optional<float> ab = get_split_point(coord(a), coord(b));
+                std::optional<float> ac = get_split_point(coord(a), coord(c));
+                                                                               
+                if (ab && ac)
                 {
-                    float alpha = 1.0f;
-                    auto is_better_alpha = [&alpha](float new_alpha)
-                    {
-                        return EPS < new_alpha && new_alpha < 1 - EPS && abs(new_alpha - 0.5) < abs(alpha - 0.5);
-                    };
+                    const float split_point = is_min ? std::min(ab.value(), ac.value()) : std::max(ab.value(), ac.value());
+                    const vertex_index_t iab = split_vertex(vertex_format, face_data, ia, ib, (split_point - coord(a)) / (coord(b) - coord(a)));
+                    const vertex_index_t iac = split_vertex(vertex_format, face_data, ia, ic, (split_point - coord(a)) / (coord(c) - coord(a)));
 
-                    if (const float alpha_x = get_alpha(a.x, b.x); is_better_alpha(alpha_x))
-                        alpha = alpha_x;
-                    if (const float alpha_y = get_alpha(a.y, b.y); is_better_alpha(alpha_y))
-                        alpha = alpha_y;
-                    //if (const float alpha_z = get_alpha(a.z, b.z); is_better_alpha(alpha_z))
-                    //    alpha = alpha_z;
+                    q.insert(q.end(), {
+                        { ia, iab, iac },
+                        { iab, ib, ic },
+                        { iab, ic, iac }
+                    });
 
-                    if (EPS < alpha && alpha < 1 - EPS)
-                    {
-                        const vertex_index_t iab = face_data.vertices.size();
-                        auto ab = interpolate_vertex_attributes(
-                            vertex_format,
-                            face_data.vertices.at(ia).attributes,
-                            face_data.vertices.at(ib).attributes,
-                            alpha
-                        );
-                        
-                        face_data.vertices.emplace_back(std::move(ab));
-                        q.emplace_back(ic, ia, iab);
-                        q.emplace_back(ib, ic, iab);
-                        found = true;
-                    }
+                    return true;
                 }
 
-                rotate_counter_clockwise();
-            }
+                return false;
+            };
 
-            if (!found) {
-                face_data.indexes.push_back(ia);
-                face_data.indexes.push_back(ib);
-                face_data.indexes.push_back(ic);
-            }
+            if (!(
+                try_split([](geom::point_3f &p) { return p.x; }, false) || 
+                try_split([](geom::point_3f &p) { return p.x; }, true) || 
+                try_split([](geom::point_3f &p) { return p.y; }, false) || 
+                try_split([](geom::point_3f &p) { return p.y; }, true)
+            ))
+                face_data.indexes.insert(face_data.indexes.end(), { ia, ib, ic });
         }
     }
 
-    float mesh_subdivider::get_border(const float a, const float b) const
+    std::optional<float> mesh_subdivider::get_split_point(float a, float b) const
     {
-        if (a < b)
-            return (static_cast<int>((a + EPS) / cell_size) + 1) * cell_size;
-        return (static_cast<int>((b + EPS) / cell_size) + 1) * cell_size;
-    }
+        if (abs(a - b) <= EPS)
+            return {};
 
-    float mesh_subdivider::get_alpha(const float a, const float b) const
-    {
-        return (get_border(a, b) - a) / (b - a);
-    }
+        bool flip = false;
+        if (a > b)
+        {
+            std::swap(a, b);
+            flip = true;
+        }
 
-    bool mesh_subdivider::over_the_edge(const float a, const float b) const
-    {
-        const float border = get_border(a, b);
-        return abs(a - b) >= EPS && (a < border - EPS && border + EPS < b || b < border - EPS && border + EPS < a);
+        a += EPS;
+        b -= EPS;
+
+        float a_cell, b_cell;
+        std::modf(a / cell_size, &a_cell);
+        std::modf(b / cell_size, &b_cell);
+
+        if (a_cell < b_cell || a < 0 && b > 0)
+        {
+            const float ab = flip
+                ? (a < 0 ? a_cell : a_cell + 1) * cell_size
+                : (b < 0 ? b_cell - 1 : b_cell) * cell_size;
+
+            if (a < ab && ab < b)
+                return ab;
+        }
+
+        OSG_DEBUG << "Not splitting " << a << " & " << b << ": " << a_cell << " & " << b_cell << (flip ? " [FLIP]" : "") << std::endl;
+
+        return {};
     }
 
     void mesh_subdivider::fill_processed_data() // filling output data buffer and updating aoa
