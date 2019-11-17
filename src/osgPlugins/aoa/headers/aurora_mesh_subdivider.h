@@ -52,11 +52,18 @@ private:
     void subdivide();
     void fill_processed_data();
 
-    mesh_face_data_t subdivide_mesh_face(const refl::node::mesh_t::mesh_vao_ref &, const mesh_face_data_t &, vertex_index_t, vertex_index_data_t &);
+    mesh_face_data_t subdivide_mesh_face(
+        const refl::data_buffer::vao_buffer &vao,
+        const geometry_stream_t &stream,
+        unsigned vertex_stride,
+        const mesh_face_data_t& face_info,
+        vertex_index_data_t& mesh_vertex_index_data
+    );
     
     void subdivide_triangle(
         const vertex_format_t &vertex_format,
         vertex_index_data_t &face_data,
+        vertex_index_t base_vertex,
         vertex_index_t ia0, vertex_index_t ib0, vertex_index_t ic0
     );
 
