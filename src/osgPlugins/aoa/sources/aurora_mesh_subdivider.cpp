@@ -86,10 +86,10 @@ namespace aurora {
         {
             typedef uint32_t Packing;
 
-            Packing w : 2;
-            Packing z : 10;
-            Packing y : 10;
             Packing x : 10;
+            Packing y : 10;
+            Packing z : 10;
+            Packing w : 2;
 
             const static inline float mod_10 = 0b1111111111;
             const static inline float mod_2 = 0b11;
@@ -97,11 +97,11 @@ namespace aurora {
         struct packed_data_t
         {
             typedef int32_t Packing;
-            
-            Packing w : 2;
-            Packing z : 10;
-            Packing y : 10;
+
             Packing x : 10;
+            Packing y : 10;
+            Packing z : 10;
+            Packing w : 2;
 
             const static inline float mod_10 = 0b111111111;
             const static inline float mod_2 = 0b1;
@@ -120,10 +120,10 @@ namespace aurora {
             {
                 std::vector<uint8_t> out(type_to_size.at(Type));
                 Inner out_value = {
-                    Inner::Packing(attr.w * Inner::mod_2), 
-                    Inner::Packing(attr.z * Inner::mod_10), 
-                    Inner::Packing(attr.y * Inner::mod_10), 
-                    Inner::Packing(attr.x * Inner::mod_10)
+                    Inner::Packing(attr.x * Inner::mod_10),
+                    Inner::Packing(attr.y * Inner::mod_10),
+                    Inner::Packing(attr.z * Inner::mod_10),
+                    Inner::Packing(attr.w * Inner::mod_2)
                 };
                 *reinterpret_cast<Inner *>(out.data()) = out_value;
 
@@ -265,26 +265,22 @@ namespace aurora {
                 assert(a_attribute.size() == attribute.size && b_attribute.size() == attribute.size);
 
                 ab_attributes.emplace_back(attribute.size);
-                if (false && attribute.mode == attr_mode_t::ATTR_MODE_PACKED) // TODO: fix
+                if (attribute.mode == attr_mode_t::ATTR_MODE_PACKED)
                 {
                     // normal should be slerped
-                    geom::point_4f a(a_attribute.at(0), a_attribute.at(1), a_attribute.at(2), a_attribute.at(3));
+                    assert(a_attribute.at(3) == 0 && b_attribute.at(3) == 0);
+                    
+                    geom::point_3f a(a_attribute.at(0), a_attribute.at(1), a_attribute.at(2));
                     normalize(a);
 
-                    geom::point_4f b(b_attribute.at(0), b_attribute.at(1), b_attribute.at(2), b_attribute.at(3));
+                    geom::point_3f b(b_attribute.at(0), b_attribute.at(1), b_attribute.at(2));
                     normalize(b);
 
-                    geom::point_4f ab;
+                    geom::point_3f ab;
 
                     float dot = a.x * b.x + a.y * b.y + a.z * b.z;
 
-                    /*
-                    dot = cos(theta)
-                    if (dot < 0), v1 and v2 are more than 90 degrees apart,
-                    so we can invert one to reduce spinning
-                    */
-
-                    if (dot < 0.95)
+                    if (abs(dot) < 0.99)
                     {
                         const auto angle = acos(dot);
                         const auto sin_angle = sin(angle);
@@ -294,11 +290,10 @@ namespace aurora {
                         ab = (a * sin_angle_inv_alpha + b * sin_angle_alpha) / sin_angle;
                     }
                     else
-                        // if the angle is small, use linear interpolation
                         ab = geom::blend(a, b, alpha);
                     normalize(ab);
 
-                    ab_attributes.back() = { ab.x, ab.y, ab.z, ab.w };
+                    ab_attributes.back() = { ab.x, ab.y, ab.z, 0 };
 
                 }
                 else
@@ -537,8 +532,8 @@ namespace aurora {
             const auto try_split = [&, this](auto coord, const bool is_min)
             {            
                 while (is_min ? coord(a) > std::min(coord(b), coord(c)) : coord(a) < std::max(coord(b), coord(c)))
-                    rotate_ccw();                                              
-                                                                               
+                    rotate_ccw();
+                                    
                 std::optional<float> ab = get_split_point(coord(a), coord(b));
                 std::optional<float> ac = get_split_point(coord(a), coord(c));
                                                                                
@@ -561,10 +556,10 @@ namespace aurora {
             };
 
             if (!(
-                try_split([](indexed_point &p) { return p.p.x; }, false) ||
-                try_split([](indexed_point &p) { return p.p.x; }, true) ||
-                try_split([](indexed_point &p) { return p.p.y; }, false) ||
-                try_split([](indexed_point &p) { return p.p.y; }, true)
+                try_split([](indexed_point &p) { return p.p.x; }, false) 
+                || try_split([](indexed_point &p) { return p.p.x; }, true) 
+                || try_split([](indexed_point &p) { return p.p.y; }, false) 
+                || try_split([](indexed_point &p) { return p.p.y; }, true)
             ))
                 geometry_stream.indexes.insert(geometry_stream.indexes.end(), { a.i, b.i, c.i });
         }
