@@ -267,6 +267,7 @@ namespace aurora {
                 ab_attributes.emplace_back(attribute.size);
                 if (false && attribute.mode == attr_mode_t::ATTR_MODE_PACKED) // TODO: fix
                 {
+                    // normal should be slerped
                     geom::point_4f a(a_attribute.at(0), a_attribute.at(1), a_attribute.at(2), a_attribute.at(3));
                     normalize(a);
 
@@ -304,7 +305,7 @@ namespace aurora {
                     for (size_t j = 0; j < attribute.size; ++j)
                         ab_attributes.back().at(j) = geom::blend(a_attribute.at(j), b_attribute.at(j), alpha);
             }
-
+                
             return ab_attributes;
         }
     }
@@ -352,6 +353,41 @@ namespace aurora {
         }
     }
 
+    mesh_subdivider::geometry_stream_t::geometry_stream_t(data_buffer_t &&data_buffer, aoa_geometry_stream_t &aoa_geometry_stream, aoa_vao_t &aoa_vao)
+        : aoa_vao(aoa_vao)
+        , aoa_geometry_stream(aoa_geometry_stream)
+        , vertex_stride(attribute_operations::vertex_format_stride(aoa_vao.format))
+        , coordinate_attribute(attribute_operations::vertex_coordinate_attribute_index(aoa_vao.format))
+    {
+        {
+            const uint8_t *vertex_start = data_buffer.data.data()
+                + data_buffer.info.vertex_file_offset_size.offset
+                + aoa_geometry_stream.vertex_offset_size.offset;
+
+            const auto vertex_count = aoa_geometry_stream.vertex_offset_size.size / vertex_stride;
+            vertices.reserve(vertex_count);
+            for (size_t i = 0; i < vertex_count; ++i)
+                vertices.emplace_back(aoa_vao.format, vertex_start + i * vertex_stride);
+        }
+
+        {
+            bool short_index = aoa_vao.vertex_format_offset.format <= std::numeric_limits<unsigned short>::max();
+            index_stride = short_index ? sizeof(uint16_t) : sizeof(uint32_t);
+
+            const uint8_t *index_start = data_buffer.data.data()
+                + data_buffer.info.index_file_offset_size.offset
+                + aoa_geometry_stream.index_offset_size.offset;
+
+            const auto index_count = aoa_geometry_stream.index_offset_size.size / index_stride;
+            indexes.reserve(index_count);
+            for (size_t i = 0; i < index_count; ++i)
+                indexes.emplace_back(short_index
+                    ? *reinterpret_cast<const uint16_t *>(index_start + i * index_stride)
+                    : *reinterpret_cast<const uint32_t *>(index_start + i * index_stride)
+                );
+        }
+    }
+
     static refl::node &get_node(refl::aurora_format &aoa, std::string &&name)
     {
         const auto compare_case_insensitive = [](auto &&a, auto &&b) noexcept
@@ -381,139 +417,115 @@ namespace aurora {
         ss << buffer_file.rdbuf();
         auto content = ss.str();
 
-        data_buffer_in = { content.begin(), content.end() };
+        std::vector<uint8_t> data_buffer_in{ content.begin(), content.end() };
+        map_data_buffer(data_buffer_in);
 
         subdivide();
-        fill_processed_data();
+        assemble_data_buffer(data_buffer_in);
+    }
+
+    void mesh_subdivider::map_data_buffer(std::vector<uint8_t> &data_buffer_in)
+    {
+        std::map<unsigned, unsigned> stream_vao_mapping;
+
+        for (auto &nd : aoa.nodes)
+            if (auto &mesh = nd.mesh) {
+                const auto &[stream_id, vao_id] = mesh->vao_ref;
+                if (stream_vao_mapping.find(stream_id) == stream_vao_mapping.end()) { // ensure that each geometry stream belong to at most one vao
+                    stream_vao_mapping.emplace(stream_id, vao_id);
+
+                    auto[it, success] = geometry_streams.emplace(
+                        stream_id,
+                        geometry_stream_t(
+                            data_buffer_t{ aoa.buffer_data, data_buffer_in },
+                            root_node.controllers.object_param_controller->buffer.geometry_streams.at(stream_id),
+                            aoa.buffer_data.vaos.at(vao_id)
+                        )
+                    );
+                    assert(success);
+                }
+                else
+                    assert(stream_vao_mapping.at(stream_id) == vao_id);
+            }
     }
 
     void mesh_subdivider::subdivide()
     {
-        std::map<unsigned, unsigned> vao_vertex_stride;
-        std::map<unsigned, unsigned> vao_vertex_count;
-        for (auto& nd : aoa.nodes)
-            if (auto& mesh = nd.mesh) {
-                const auto [stream_id, vao_id] = mesh->vao_ref;
-                const auto &vao = aoa.buffer_data.vaos.at(vao_id);
-                const auto &stream = get_geometry_stream(stream_id);
-                const auto vertex_stride = attribute_operations::vertex_format_stride(vao.format);
-                vao_vertex_stride[vao_id] = vertex_stride;
-                vao_vertex_count[vao_id] += stream.vertex_offset_size.size / vertex_stride;
-            }
+        std::map<unsigned, std::vector<vertex_index_t>> old_indexes;
+        for (auto &[stream_id, stream] : geometry_streams)
+            std::swap(old_indexes[stream_id], stream.indexes);
 
         for (auto &nd : aoa.nodes)
             if (auto &mesh = nd.mesh) {
-                const auto vao_ref = mesh->vao_ref;
-                const auto &vao = aoa.buffer_data.vaos.at(vao_ref.vao_id);
-                const auto &stream = get_geometry_stream(vao_ref.geom_stream_id);
-
-                const auto &vertex_format = vao.format;
-                const auto vertex_stride = vao_vertex_stride.at(vao_ref.vao_id);
-
-                vertex_index_data_t vertex_index_data;
-                
-                const auto& vao_offset = vao.vertex_format_offset.offset;
-                {
-                    const uint8_t* vertex_start = data_buffer_in.data()
-                        + aoa.buffer_data.vertex_file_offset_size.offset
-                        + vao_offset;
-                    const auto vertex_count = vao_vertex_count.at(vao_ref.vao_id);
-
-                    vertex_index_data.vertices.reserve(vertex_count);
-                    for (size_t i = 0; i < vertex_count; ++i)
-                        vertex_index_data.vertices.emplace_back(vertex_format, vertex_start + i * vertex_stride);
-                }
-
-                std::vector<mesh_face_data_t> face_data;
+                const auto stream_id = mesh->vao_ref.geom_stream_id;
+                auto &geometry_stream = geometry_streams.at(stream_id);
 
                 split_vertex_cache.clear();
-                for (auto &mesh_face : mesh->face_array) {
+                
+                for (auto &mesh_face : mesh->face_array)
                     if (auto &face_info = mesh_face.with_shadow_mat)
-                        face_data.push_back(subdivide_mesh_face(vao, stream, vertex_stride, face_info.value(), vertex_index_data));
-                }
-
-                data_cache.insert({
-                    { mesh->vao_ref.geom_stream_id, mesh->vao_ref.vao_id },
-                    { mesh.value(), std::move(vertex_index_data), std::move(face_data) }
-                });
+                        subdivide_mesh_face(
+                            face_info.value(),
+                            geometry_stream,
+                            old_indexes.at(stream_id),
+                            face_info->offset - geometry_stream.aoa_geometry_stream.index_offset_size.offset / geometry_stream.index_stride,
+                            face_info->base_vertex - geometry_stream.aoa_geometry_stream.vertex_offset_size.offset / geometry_stream.vertex_stride
+                        );
             }
     }
 
-    mesh_subdivider::mesh_face_data_t mesh_subdivider::subdivide_mesh_face(
-        const refl::data_buffer::vao_buffer &vao, 
-        const geometry_stream_t &stream,
-        const unsigned vertex_stride, 
-        const mesh_face_data_t &face_info,
-        vertex_index_data_t &mesh_vertex_index_data
+    void mesh_subdivider::subdivide_mesh_face(
+        mesh_face_data_t &face_info,
+        geometry_stream_t &geometry_stream,
+        const std::vector<vertex_index_t> &indexes_in,
+        const size_t offset,
+        const size_t base_vertex
     ) {
-        mesh_face_data_t output_face_info = face_info;
+        const auto new_offset = geometry_stream.indexes.size();
 
-        const auto &vertex_format = vao.format;
-        const auto is_short_index = vao.vertex_format_offset.format == 0xFFFF;
+        for (unsigned i = 0; i < face_info.count; ++i)
+            subdivide_triangle(
+                geometry_stream, 
+                base_vertex + indexes_in.at(offset + 3 * i + 0), 
+                base_vertex + indexes_in.at(offset + 3 * i + 1),
+                base_vertex + indexes_in.at(offset + 3 * i + 2)
+            );
 
-        const auto index_size = is_short_index ? 2 : 4;
-        const auto indexes_begin = data_buffer_in.data() + aoa.buffer_data.index_file_offset_size.offset
-            + stream.index_offset_size.offset + index_size * face_info.offset;
-        const auto base_vertex = face_info.base_vertex - stream.vertex_offset_size.offset / vertex_stride;
-        
-        const auto prev_index_count = mesh_vertex_index_data.indexes.size();
+        const auto new_vertices = geometry_stream.indexes.size() - new_offset;
+        assert(new_vertices % 3 == 0);
 
-        const auto subdivide_face_triangles = [&, this](const auto indexes_in_begin)
-        {
-            for (unsigned i = 0; i < face_info.count; ++i)
-                subdivide_triangle(
-                    vertex_format, mesh_vertex_index_data, base_vertex, 
-                    indexes_in_begin[3 * i + 0],
-                    indexes_in_begin[3 * i + 1],
-                    indexes_in_begin[3 * i + 2]
-                );
-        };
+        OSG_DEBUG << face_info.count << " -> " << new_vertices / 3 << " triangles\n";
 
-        if (is_short_index)
-            subdivide_face_triangles(reinterpret_cast<uint16_t *>(indexes_begin));
-        else
-            subdivide_face_triangles(reinterpret_cast<uint32_t *>(indexes_begin));
-
-        output_face_info.offset = prev_index_count;
-        output_face_info.base_vertex = base_vertex;
-        output_face_info.num_vertices = mesh_vertex_index_data.indexes.size() - prev_index_count;
-        assert(output_face_info.num_vertices % 3 == 0);
-        output_face_info.count = output_face_info.num_vertices / 3;
-
-        OSG_DEBUG << face_info.count << " -> " << output_face_info.count << " triangles\n";
-
-        return output_face_info;
+        face_info.offset = new_offset;
+        face_info.base_vertex = 0;
+        face_info.num_vertices = new_vertices;
+        face_info.count = face_info.num_vertices / 3;
     }
     
     void mesh_subdivider::subdivide_triangle(
-        const vertex_format_t &vertex_format, 
-        vertex_index_data_t &face_data,
-        const vertex_index_t base_vertex,
+        geometry_stream_t &geometry_stream,
         const vertex_index_t ia0, const vertex_index_t ib0, const vertex_index_t ic0
     ) {
         using namespace attribute_operations;
 
-        const auto vertex_coordinate_index = vertex_coordinate_attribute_index(vertex_format);
-
         std::deque<std::tuple<vertex_index_t, vertex_index_t, vertex_index_t>> q = { { ia0, ib0, ic0 } };
+
+        struct indexed_point
+        {
+            vertex_index_t i;
+            geom::point_3f p;
+
+            indexed_point(vertex_index_t i, geometry_stream_t &geometry_stream)
+                : i(i)
+                , p(to_point_3f(geometry_stream.vertices.at(i).attributes.at(geometry_stream.coordinate_attribute)))
+            {}
+        };
 
         while (!q.empty())
         {
-            struct indexed_point_t
-            {
-                vertex_index_t i_local, i_global;
-                geom::point_3f p;
-
-                indexed_point_t(vertex_index_t i, vertex_index_t base_vertex, vertex_index_data_t &face_data, const int vertex_coordinate_index)
-                    : i_local(i)
-                    , i_global(i + base_vertex)
-                    , p(to_point_3f(face_data.vertices.at(i_global).attributes.at(vertex_coordinate_index)))
-                {}
-            };
-
-            indexed_point_t a(std::get<0>(q.front()), base_vertex, face_data, vertex_coordinate_index);
-            indexed_point_t b(std::get<1>(q.front()), base_vertex, face_data, vertex_coordinate_index);
-            indexed_point_t c(std::get<2>(q.front()), base_vertex, face_data, vertex_coordinate_index);
+            indexed_point a(std::get<0>(q.front()), geometry_stream);
+            indexed_point b(std::get<1>(q.front()), geometry_stream);
+            indexed_point c(std::get<2>(q.front()), geometry_stream);
             q.pop_front();
 
             const auto rotate_ccw = [&a, &b, &c]()
@@ -533,17 +545,13 @@ namespace aurora {
                 if (ab && ac)
                 {
                     const float split_point = is_min ? std::min(ab.value(), ac.value()) : std::max(ab.value(), ac.value());
-                    const vertex_index_t iab = split_vertex(
-                        vertex_format, face_data, a.i_global, b.i_global, (split_point - coord(a)) / (coord(b) - coord(a))
-                    ) - base_vertex;
-                    const vertex_index_t iac = split_vertex(
-                        vertex_format, face_data, a.i_global, c.i_global, (split_point - coord(a)) / (coord(c) - coord(a))
-                    ) - base_vertex;
+                    const vertex_index_t iab = split_vertex(geometry_stream, a.i, b.i, (split_point - coord(a)) / (coord(b) - coord(a)));
+                    const vertex_index_t iac = split_vertex(geometry_stream, a.i, c.i, (split_point - coord(a)) / (coord(c) - coord(a)));
 
                     q.insert(q.end(), {
-                        { a.i_local, iab, iac },
-                        { iab, b.i_local, c.i_local },
-                        { iab, c.i_local, iac }
+                        { a.i, iab, iac },
+                        { iab, b.i, c.i },
+                        { iab, c.i, iac }
                     });
 
                     return true;
@@ -553,30 +561,29 @@ namespace aurora {
             };
 
             if (!(
-                try_split([](indexed_point_t &p) { return p.p.x; }, false) || 
-                try_split([](indexed_point_t &p) { return p.p.x; }, true) ||
-                try_split([](indexed_point_t &p) { return p.p.y; }, false) ||
-                try_split([](indexed_point_t &p) { return p.p.y; }, true)
+                try_split([](indexed_point &p) { return p.p.x; }, false) ||
+                try_split([](indexed_point &p) { return p.p.x; }, true) ||
+                try_split([](indexed_point &p) { return p.p.y; }, false) ||
+                try_split([](indexed_point &p) { return p.p.y; }, true)
             ))
-                face_data.indexes.insert(face_data.indexes.end(), { a.i_local, b.i_local, c.i_local });
+                geometry_stream.indexes.insert(geometry_stream.indexes.end(), { a.i, b.i, c.i });
         }
     }
 
     mesh_subdivider::vertex_index_t mesh_subdivider::split_vertex(
-        const vertex_format_t &vertex_format, vertex_index_data_t &face_data,
-        const vertex_index_t ia, const vertex_index_t ib, const float alpha)
-    {
+        geometry_stream_t &geometry_stream, const vertex_index_t ia, const vertex_index_t ib, const float alpha
+    ) {
         if (const auto it = split_vertex_cache.find({ ia, ib, alpha }); it != split_vertex_cache.end())
             return it->second;
 
-        const auto index = face_data.vertices.size();
+        const auto index = geometry_stream.vertices.size();
         auto ab = attribute_operations::interpolate_vertex_attributes(
-            vertex_format,
-            face_data.vertices.at(ia).attributes,
-            face_data.vertices.at(ib).attributes,
+            geometry_stream.aoa_vao.format,
+            geometry_stream.vertices.at(ia).attributes,
+            geometry_stream.vertices.at(ib).attributes,
             alpha
         );
-        face_data.vertices.emplace_back(std::move(ab));
+        geometry_stream.vertices.emplace_back(std::move(ab));
 
         split_vertex_cache.emplace(std::make_tuple(ia, ib, alpha), index);
         return index;
@@ -584,7 +591,7 @@ namespace aurora {
 
     const static float EPS = 1e-3f;
 
-    std::optional<float> mesh_subdivider::get_split_point(float a, float b) const
+    std::optional<float> mesh_subdivider::get_split_point(float a, float b)
     {
         if (abs(a - b) <= EPS)
             return {};
@@ -617,39 +624,17 @@ namespace aurora {
         return {};
     }
 
-    void mesh_subdivider::fill_processed_data() // filling output data buffer and updating aoa
+    void mesh_subdivider::assemble_data_buffer(const std::vector<uint8_t> &data_buffer_in) // filling output data buffer and updating aoa
     {
-        std::map<unsigned, unsigned> stream_vao_mapping;
-        std::map<unsigned, std::set<unsigned>> vao_stream_mapping;
-        std::map<unsigned, vertex_index_data_t> stream_data;
-        
-        for (auto &[stream_vao_id, mesh_data] : data_cache)
-        {
-            auto &[stream_id, vao_id] = stream_vao_id;
-            if (stream_vao_mapping.find(stream_id) == stream_vao_mapping.end()) { // ensure that each geometry stream belong to at most one vao
-                stream_vao_mapping.emplace(stream_id, vao_id);
-                vao_stream_mapping[vao_id].insert(stream_id); // create new if needed
-            } 
-            else
-                assert(stream_vao_mapping.at(stream_id) == vao_id);
+        std::map<unsigned, std::set<unsigned>> vaos_to_streams;
+        for (auto &nd : aoa.nodes)
+            if (auto &mesh = nd.mesh) 
+            {
+                const auto [stream_id, vao_id] = mesh->vao_ref;
+                vaos_to_streams[vao_id].insert(stream_id);
+            }
 
-            vertex_index_data_t &vertex_index_data = stream_data[stream_id]; // create new if needed
-
-            auto &[mesh_info, mesh_vertex_index_data, mesh_face_info] = mesh_data;
-
-            const uint64_t vertex_offset = vertex_index_data.vertices.size();
-
-            if (auto &tmp_vertex = mesh_vertex_index_data.vertices; !tmp_vertex.empty())
-                std::copy(tmp_vertex.begin(), tmp_vertex.end(), std::back_inserter(vertex_index_data.vertices));
-
-            if (auto &tmp_index = mesh_vertex_index_data.indexes; !tmp_index.empty())
-                std::copy(tmp_index.begin(), tmp_index.end(), std::back_inserter(vertex_index_data.indexes));
-
-            for (auto &face_info : mesh_face_info)
-                face_info.base_vertex += vertex_offset; // later add stream offset so we actually count from VAO start
-        }
-
-        auto add_to_end = [](uint8_t *from, std::vector<uint8_t> &to, int offset, int size) // copy from input data buffer to output without changes
+        const auto add_to_end = [](const uint8_t *from, std::vector<uint8_t> &to, int offset, int size) // copy from input data buffer to output without changes
         {
             const auto new_offset = to.size();
             std::copy(from + offset, from + offset + size, std::back_inserter(to));
@@ -657,14 +642,16 @@ namespace aurora {
             return new_offset;
         };
 
-        auto add_to_end_in_out = [this, &add_to_end](int offset, int size) // copy from input data buffer to output without changes
+        const auto add_to_end_in_out = [this, &add_to_end, &data_buffer_in](int offset, int size) // copy from input data buffer to output without changes
         {
-            return add_to_end(data_buffer_in.data(), data_buffer_out, offset, size);
+            return add_to_end(data_buffer_in.data(), data_buffer, offset, size);
         };
 
-        add_to_end_in_out(0, 24); // fill header TODO: magic + sizes instead of just copying
+        // fill header TODO: magic + sizes instead of just copying
+        add_to_end_in_out(0, 24);
 
-        for (auto& light_stream : root_node.controllers.object_param_controller->buffer.light_streams) // copy light streams TODO: needed?
+        // copy light streams TODO: needed?
+        for (auto& light_stream : root_node.controllers.object_param_controller->buffer.light_streams)
         {
             auto&[offset, size] = light_stream.light_offset_size;
             offset = add_to_end_in_out(offset, size);
@@ -673,96 +660,94 @@ namespace aurora {
         // fill index file
         auto &[index_offset, index_size] = aoa.buffer_data.index_file_offset_size;
         {
-            index_offset = data_buffer_out.size();
-            if (auto &collision_stream = root_node.controllers.object_param_controller->buffer.collision_stream) { // collision stream TODO: needed?
+            index_offset = data_buffer.size();
+
+            // collision stream TODO: needed?
+            if (auto &collision_stream = root_node.controllers.object_param_controller->buffer.collision_stream) {
                 auto &[offset, size] = collision_stream->index_offset_size;
                 offset = add_to_end_in_out(offset, size);
             }
 
-            for (auto &[vao_id, stream_ids] : vao_stream_mapping) // filling vao index info
+            for (auto &[vao_id, stream_ids] : vaos_to_streams)
             {
-                int max_index = -1;
+                // vao index size
+                size_t max_index = 0;
                 for (auto stream_id : stream_ids) {
-                    auto &stream_indexes = stream_data.at(stream_id).indexes;
-                    if (auto max_iter = std::max_element(stream_indexes.begin(), stream_indexes.end()); max_iter != stream_indexes.end())
+                    auto &stream = geometry_streams.at(stream_id);
+                    if (auto max_iter = std::max_element(stream.indexes.begin(), stream.indexes.end()); max_iter != stream.indexes.end())
                         max_index = std::max(max_index, *max_iter);
                 }
-                const bool use_short = max_index <= 0xFFFF;
-                aoa.buffer_data.vaos[vao_id].vertex_format_offset.format = use_short ? 0xFFFF : 0xFFFFFFFF; // vao index size
+                const bool use_short = max_index <= std::numeric_limits<unsigned short>::max();
+                aoa.buffer_data.vaos[vao_id].vertex_format_offset.format = use_short ? std::numeric_limits<unsigned short>::max() : std::numeric_limits<unsigned int>::max();
 
-                assert(stream_ids.size() == *stream_ids.rbegin() + 1);
+                // stream index info
                 for (auto stream_id : stream_ids)
                 {
-                    auto &stream_indexes = stream_data[stream_id].indexes;
-                    auto &geometry_stream = get_geometry_stream(stream_id);
-                    auto &[offset, size] = geometry_stream.index_offset_size;
-                    size = stream_indexes.size() * (use_short ? 2 : 4);
+                    auto &stream = geometry_streams.at(stream_id);
+                    auto &[offset, size] = stream.aoa_geometry_stream.index_offset_size;
+                    size = stream.indexes.size() * (use_short ? sizeof(uint16_t) : sizeof(uint32_t));
                     if (use_short)
                     {
                         std::vector<uint16_t> indexes_to_add;
-                        std::copy(stream_indexes.begin(), stream_indexes.end(), std::back_inserter(indexes_to_add));
-                        offset = add_to_end(reinterpret_cast<uint8_t *>(indexes_to_add.data()), data_buffer_out, 0, size) - index_offset;
+                        std::copy(stream.indexes.begin(), stream.indexes.end(), std::back_inserter(indexes_to_add));
+                        offset = add_to_end(reinterpret_cast<uint8_t *>(indexes_to_add.data()), data_buffer, 0, size) - index_offset;
                     }
                     else
                     {
                         std::vector<uint32_t> indexes_to_add;
-                        std::copy(stream_indexes.begin(), stream_indexes.end(), std::back_inserter(indexes_to_add));
-                        offset = add_to_end(reinterpret_cast<uint8_t *>(indexes_to_add.data()), data_buffer_out, 0, size) - index_offset;
+                        std::copy(stream.indexes.begin(), stream.indexes.end(), std::back_inserter(indexes_to_add));
+                        offset = add_to_end(reinterpret_cast<uint8_t *>(indexes_to_add.data()), data_buffer, 0, size) - index_offset;
                     }
                 }
             }
 
-            index_size = data_buffer_out.size() - index_offset;
+            index_size = data_buffer.size() - index_offset;
         }
 
         // fill vertex file
+        auto &[vertex_offset, vertex_size] = aoa.buffer_data.vertex_file_offset_size;
         {
-            auto &[vertex_offset, vertex_size] = aoa.buffer_data.vertex_file_offset_size;
-            vertex_offset = data_buffer_out.size();
-            if (auto &collision_stream = root_node.controllers.object_param_controller->buffer.collision_stream) { // collision stream
+            vertex_offset = data_buffer.size();
+            
+            // collision stream TODO: needed?
+            if (auto &collision_stream = root_node.controllers.object_param_controller->buffer.collision_stream) {
                 auto &[offset, size] = collision_stream->vertex_offset_size;
                 offset = add_to_end_in_out(offset, size);
             }
 
-            for (auto &[vao_id, stream_ids] : vao_stream_mapping) // filling vao vertex info
+            for (auto &[vao_id, stream_ids] : vaos_to_streams)
             {
+                // vao offset
                 auto &vao_info = aoa.buffer_data.vaos[vao_id];
+                vao_info.vertex_format_offset.offset = data_buffer.size() - vertex_offset + index_size;
 
-                vao_info.vertex_format_offset.offset = data_buffer_out.size() - vertex_offset; // vao offset
+                // stream vertex info
                 for (auto stream_id : stream_ids)
                 {
-                    auto &geometry_stream = get_geometry_stream(stream_id);
-                    auto &[offset, size] = geometry_stream.vertex_offset_size;
-                    offset = data_buffer_out.size() - vertex_offset;
-                    for (auto &vertex : stream_data.at(stream_id).vertices)
-                        vertex.to_byte_buffer(vao_info.format, data_buffer_out);
-                    size = data_buffer_out.size() - vertex_offset - offset;
+                    auto &stream = geometry_streams.at(stream_id);
+                    auto &[offset, size] = stream.aoa_geometry_stream.vertex_offset_size;
+                    offset = data_buffer.size() - vertex_offset;
+                    for (auto &vertex : stream.vertices)
+                        vertex.to_byte_buffer(vao_info.format, data_buffer);
+                    size = data_buffer.size() - vertex_offset - offset;
                 }
             }
 
-            vertex_size = data_buffer_out.size() - vertex_offset;
+            vertex_size = data_buffer.size() - vertex_offset;
         }
 
-        for (auto& [stream_vao_id, mesh_data] : data_cache) // final mesh face infos
-        {
-            auto& [stream_id, vao_id] = stream_vao_id;
+        // update face info knowing new stream and vao offsets
+        for (auto &nd : aoa.nodes)
+            if (auto &mesh = nd.mesh)
+                for (auto &mesh_face : mesh->face_array)
+                    if (auto &face_info = mesh_face.with_shadow_mat)
+                    {
+                        auto &stream = geometry_streams.at(mesh->vao_ref.geom_stream_id);
+                        const bool use_short = stream.aoa_vao.vertex_format_offset.format <= std::numeric_limits<unsigned short>::max();
 
-            const auto& vao = aoa.buffer_data.vaos.at(vao_id);
-            const auto &stream = get_geometry_stream(stream_id);
-
-            const auto vertex_stride = attribute_operations::vertex_format_stride(vao.format);
-            
-            auto &[mesh_info, mesh_vertex_index_data, mesh_face_info] = mesh_data;
-
-            unsigned face_index = 0;
-            for (auto& face : mesh_info.face_array)
-                if (auto& face_info = face.with_shadow_mat) {
-                    face_info = mesh_face_info.at(face_index);
-                    face_info->base_vertex += stream.vertex_offset_size.offset / vertex_stride;
-                    
-                    face_index++;
-                }
-        }
+                        face_info->offset += stream.aoa_geometry_stream.index_offset_size.offset / (use_short ? sizeof(uint16_t) : sizeof(uint32_t));
+                        face_info->base_vertex += stream.aoa_geometry_stream.vertex_offset_size.offset / stream.vertex_stride;
+                    }
     }
 
     const refl::aurora_format &mesh_subdivider::processed_aoa() const
@@ -772,11 +757,6 @@ namespace aurora {
 
     const std::vector<uint8_t> &mesh_subdivider::processed_aod() const
     {
-        return data_buffer_out;
-    }
-
-    mesh_subdivider::geometry_stream_t& mesh_subdivider::get_geometry_stream(unsigned stream_id) const
-    {
-        return root_node.controllers.object_param_controller->buffer.geometry_streams.at(stream_id);
+        return data_buffer;
     }
 }

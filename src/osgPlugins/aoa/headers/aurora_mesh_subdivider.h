@@ -15,8 +15,14 @@ struct mesh_subdivider
     const std::vector<uint8_t> &processed_aod() const;
 
     using vertex_format_t = refl::data_buffer::vao_buffer::vertex_format;
-    using vertex_index_t = int;
+    using vertex_index_t = size_t;
     using vertex_attributes_t = std::vector<std::vector<float>>;
+
+    struct data_buffer_t
+    {
+        refl::data_buffer &info;
+        std::vector<uint8_t> data;
+    };
 private:
 
     struct vertex_data_t
@@ -28,50 +34,46 @@ private:
         void to_byte_buffer(const vertex_format_t &vertex_format, std::vector<uint8_t> &byte_buffer) const;
     };
 
-    struct vertex_index_data_t
+    struct geometry_stream_t
     {
-        std::vector<vertex_data_t> vertices;
-        std::vector<int> indexes;
-    };
+        using aoa_geometry_stream_t = refl::node::controllers_t::control_object_param_data::data_buffer::geometry_buffer_stream;
+        using aoa_vao_t = refl::data_buffer::vao_buffer;
 
-    using vao_ref_t = std::pair<unsigned, unsigned>;
-    using geometry_stream_t = refl::node::controllers_t::control_object_param_data::data_buffer::geometry_buffer_stream;
+        aoa_vao_t &aoa_vao;
+        aoa_geometry_stream_t &aoa_geometry_stream;
+
+        const size_t vertex_stride;
+        size_t index_stride;
+        const size_t coordinate_attribute;
+
+        std::vector<vertex_data_t> vertices;
+        std::vector<vertex_index_t> indexes;
+
+        geometry_stream_t(data_buffer_t &&, aoa_geometry_stream_t &, aoa_vao_t &);
+    };
+    
     using mesh_face_data_t = refl::node::mesh_t::mesh_face::mesh_face_offset_count_base_mat;
-    using mesh_data_t = std::tuple<refl::node::mesh_t &, vertex_index_data_t, std::vector<mesh_face_data_t>>;
 
     refl::aurora_format aoa;
     refl::node &root_node;
+    std::map<unsigned, geometry_stream_t> geometry_streams;
+
     std::filesystem::path dirname, filename;
 
     float cell_size;
 
-    std::multimap<vao_ref_t, mesh_data_t> data_cache;
-    std::vector<uint8_t> data_buffer_in, data_buffer_out;
+    std::vector<uint8_t> data_buffer;
     std::map<std::tuple<vertex_index_t, vertex_index_t, float>, vertex_index_t> split_vertex_cache;
+
+    void map_data_buffer(std::vector<uint8_t> &);
     
     void subdivide();
-    void fill_processed_data();
+    void subdivide_mesh_face(mesh_face_data_t &, geometry_stream_t &, const std::vector<vertex_index_t> &, size_t, size_t);
+    void subdivide_triangle(geometry_stream_t &, vertex_index_t, vertex_index_t, vertex_index_t);
+    std::optional<float> get_split_point(float a, float b);
+    vertex_index_t split_vertex(geometry_stream_t &, vertex_index_t, vertex_index_t, float);
 
-    mesh_face_data_t subdivide_mesh_face(
-        const refl::data_buffer::vao_buffer &vao,
-        const geometry_stream_t &stream,
-        unsigned vertex_stride,
-        const mesh_face_data_t& face_info,
-        vertex_index_data_t& mesh_vertex_index_data
-    );
-    
-    void subdivide_triangle(
-        const vertex_format_t &vertex_format,
-        vertex_index_data_t &face_data,
-        vertex_index_t base_vertex,
-        vertex_index_t ia0, vertex_index_t ib0, vertex_index_t ic0
-    );
-
-    vertex_index_t split_vertex(const vertex_format_t &vertex_format, vertex_index_data_t &face_data, vertex_index_t ia, vertex_index_t ib, float alpha);
-
-    std::optional<float> get_split_point(float a, float b) const;
-
-    geometry_stream_t &get_geometry_stream(unsigned stream_id) const;
+    void assemble_data_buffer(const std::vector<uint8_t> &);
 };
 
 }
