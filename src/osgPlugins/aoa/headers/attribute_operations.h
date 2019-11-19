@@ -48,7 +48,7 @@ namespace aurora {
                 virtual ~base_attribute_converter() = default;
                 virtual Outer from_binary(uint8_t const* data) const = 0;
 
-                virtual std::vector<uint8_t> to_binary(const Outer&& attr) const = 0;
+                virtual void to_binary(const Outer&& attr, std::vector<uint8_t> &out) const = 0;
             };
 
             template<attr_type_t Type, typename Inner>
@@ -58,12 +58,11 @@ namespace aurora {
                     return *reinterpret_cast<Inner const*>(data);
                 }
 
-                std::vector<uint8_t> to_binary(const float&& attr) const override
+                void to_binary(const float&& attr, std::vector<uint8_t> &out) const override
                 {
-                    std::vector<uint8_t> out(type_to_size.at(Type));
-                    *reinterpret_cast<Inner *>(out.data()) = Inner(std::forward<const float>(attr));
-
-                    return out;
+                    const size_t prev_size = out.size();
+                    out.resize(prev_size + type_to_size.at(Type));
+                    *reinterpret_cast<Inner *>(out.data() + prev_size) = Inner(std::forward<const float>(attr));
                 }
             };
 
@@ -74,12 +73,11 @@ namespace aurora {
                     return 1.0f * (*reinterpret_cast<Inner const*>(data)) / Inner(~0);
                 }
 
-                std::vector<uint8_t> to_binary(const float&& attr) const override
+                void to_binary(const float&& attr, std::vector<uint8_t> &out) const override
                 {
-                    std::vector<uint8_t> out(type_to_size.at(Type));
-                    *reinterpret_cast<Inner *>(out.data()) = Inner(attr * Inner(~0));
-
-                    return out;
+                    const size_t prev_size = out.size();
+                    out.resize(prev_size + type_to_size.at(Type));
+                    *reinterpret_cast<Inner *>(out.data() + prev_size) = Inner(attr * Inner(~0));
                 }
             };
 
@@ -118,18 +116,17 @@ namespace aurora {
                     return geom::point_4f(packed_data->x / Inner::mod_10, packed_data->y / Inner::mod_10, packed_data->z / Inner::mod_10, packed_data->w / Inner::mod_2);
                 }
 
-                std::vector<uint8_t> to_binary(const geom::point_4f&& attr) const override
+                void to_binary(const geom::point_4f&& attr, std::vector<uint8_t> &out) const override
                 {
-                    std::vector<uint8_t> out(type_to_size.at(Type));
+                    const size_t prev_size = out.size();
+                    out.resize(prev_size + type_to_size.at(Type));
                     Inner out_value = {
                         Inner::Packing(attr.x * Inner::mod_10),
                         Inner::Packing(attr.y * Inner::mod_10),
                         Inner::Packing(attr.z * Inner::mod_10),
                         Inner::Packing(attr.w * Inner::mod_2)
                     };
-                    *reinterpret_cast<Inner *>(out.data()) = out_value;
-
-                    return out;
+                    *reinterpret_cast<Inner *>(out.data() + prev_size) = out_value;
                 }
             };
 
@@ -141,9 +138,10 @@ namespace aurora {
                 Type == attr_type_t::HALF_FLOAT,
                 int
                 > = 0
-            > std::pair<attr_type_t, base_attribute_converter<float> *> converter_entry()
+            > base_attribute_converter<float> *converter()
             {
-                return std::make_pair(Type, new float_attribute_converter<Type, Inner>);
+                static auto converter_ptr = new float_attribute_converter<Type, Inner>;
+                return converter_ptr;
             }
 
             template<
@@ -156,9 +154,10 @@ namespace aurora {
                 Type == attr_type_t::BYTE,
                 int
                 > = 0
-            > std::pair<attr_type_t, base_attribute_converter<float> *> converter_entry()
+            > base_attribute_converter<float> *converter()
             {
-                return std::make_pair(Type, new int_attribute_converter<Type, Inner>);
+                static auto converter_ptr = new int_attribute_converter<Type, Inner>;
+                return converter_ptr;
             }
 
             template<
@@ -169,26 +168,37 @@ namespace aurora {
                 Type == attr_type_t::INT_2_10_10_10_REV,
                 int
                 > = 0
-            > std::pair<attr_type_t, base_attribute_converter<geom::point_4f> *> converter_entry()
+            > base_attribute_converter<geom::point_4f> *converter()
             {
-                return std::make_pair(Type, new packed_attribute_converter<Type, Inner>);
+                static auto converter_ptr = new packed_attribute_converter<Type, Inner>;
+                return converter_ptr;
             }
 
             static_assert(sizeof(half_float) == 2);
 
-            const std::map<attr_type_t, const base_attribute_converter<float> *> float_converters{
-                converter_entry<attr_type_t::FLOAT, float>(),
-                converter_entry<attr_type_t::HALF_FLOAT, half_float>(),
-                converter_entry<attr_type_t::UNSIGNED_INT, uint32_t>(),
-                converter_entry<attr_type_t::INT, int32_t>(),
-                converter_entry<attr_type_t::UNSIGNED_BYTE, uint8_t>(),
-                converter_entry<attr_type_t::BYTE, int8_t>()
-            };
-
-            const std::map<attr_type_t, const base_attribute_converter<geom::point_4f> *> point_4f_converters{
-                converter_entry<attr_type_t::UNSIGNED_INT_2_10_10_10_REV, u_packed_data_t>(),
-                converter_entry<attr_type_t::INT_2_10_10_10_REV,          packed_data_t  >()
-            };
+            template<typename T>
+            constexpr const base_attribute_converter<T> *get_converter(attr_type_t type)
+            {
+                if constexpr (std::is_same_v<geom::point_4f, T>)
+                    switch (type)
+                    {
+                        case attr_type_t::UNSIGNED_INT_2_10_10_10_REV: return converter<attr_type_t::UNSIGNED_INT_2_10_10_10_REV, u_packed_data_t>();
+                        case attr_type_t::         INT_2_10_10_10_REV: return converter<attr_type_t::INT_2_10_10_10_REV, packed_data_t>();
+                        default:                                       return nullptr;
+                    }
+                else {
+                    switch (type)
+                    {
+                        case attr_type_t::                      FLOAT: return converter<attr_type_t::FLOAT, float>();
+                        case attr_type_t::                 HALF_FLOAT: return converter<attr_type_t::HALF_FLOAT, half_float>();
+                        case attr_type_t::               UNSIGNED_INT: return converter<attr_type_t::UNSIGNED_INT, uint32_t>();
+                        case attr_type_t::                        INT: return converter<attr_type_t::INT, int32_t>();
+                        case attr_type_t::              UNSIGNED_BYTE: return converter<attr_type_t::UNSIGNED_BYTE, uint8_t>();
+                        case attr_type_t::                       BYTE: return converter<attr_type_t::BYTE, int8_t>();
+                        default:                                       return nullptr;
+                    }
+                }
+            }
         }
 
         inline int vertex_format_stride(const mesh_subdivider::vertex_format_t &vertex_format)
@@ -211,71 +221,64 @@ namespace aurora {
             return 0; // TODO: anything better?
         }
 
-        inline geom::point_3f to_point_3f(const std::vector<float> &coordinate_attribute) {
-            assert(coordinate_attribute.size() == 3);
-
+        inline geom::point_3f to_point_3f(const std::vector<float> &attributes, const size_t coordinate_attribute_offset) {
             return geom::point_3f(
-                coordinate_attribute.at(0),
-                coordinate_attribute.at(1),
-                coordinate_attribute.at(2)
+                attributes.at(coordinate_attribute_offset + 0),
+                attributes.at(coordinate_attribute_offset + 1),
+                attributes.at(coordinate_attribute_offset + 2)
             );
         };
 
         inline mesh_subdivider::vertex_attributes_t vertex_attributes_from_bytes(const mesh_subdivider::vertex_format_t &vertex_format, uint8_t const *bytes)
         {
-            std::vector<std::vector<float>> result;
+            std::vector<float> result;
 
             for (auto &attribute : vertex_format.attributes)
-            {
                 if (attribute.mode == attr_mode_t::ATTR_MODE_PACKED)
                 {
                     assert(attribute.size == 4); // packed 10_10_10_2 should always be vec4
 
-                    geom::point_4f point4 = point_4f_converters.at(attribute.type)->from_binary(bytes);
-                    result.push_back({ point4.x, point4.y, point4.z, point4.w });
+                    const geom::point_4f point4 = get_converter<geom::point_4f>(attribute.type)->from_binary(bytes);
+                    result.insert(result.end(), { point4.x, point4.y, point4.z, point4.w });
                     bytes += type_to_size.at(attribute.type);
                 }
                 else
-                {
-                    result.emplace_back(attribute.size);
                     for (size_t i = 0; i < attribute.size; ++i) {
-                        result.back().at(i) = float_converters.at(attribute.type)->from_binary(bytes);
+                        result.emplace_back(get_converter<float>(attribute.type)->from_binary(bytes));
                         bytes += type_to_size.at(attribute.type);
                     }
-                }
-            }
 
             return result;
         }
 
         inline mesh_subdivider::vertex_attributes_t interpolate_vertex_attributes(
             const mesh_subdivider::vertex_format_t &vertex_format,
+            const std::vector<size_t> &attribute_offsets,
             const mesh_subdivider::vertex_attributes_t &a_attributes,
             const mesh_subdivider::vertex_attributes_t &b_attributes,
             const float alpha
         ) {
-            assert(a_attributes.size() == b_attributes.size() && b_attributes.size() == vertex_format.attributes.size());
+            assert(attribute_offsets.size() == vertex_format.attributes.size());
 
-            mesh_subdivider::vertex_attributes_t ab_attributes;
+            mesh_subdivider::vertex_attributes_t ab_attributes(a_attributes.size());
 
             for (size_t i = 0; i < vertex_format.attributes.size(); ++i)
             {
-                const auto &a_attribute = a_attributes.at(i);
-                const auto &b_attribute = b_attributes.at(i);
-                const auto &attribute = vertex_format.attributes.at(i);
+                const auto current_offset = attribute_offsets[i];
+                const auto &attribute_format = vertex_format.attributes[i];
 
-                assert(a_attribute.size() == attribute.size && b_attribute.size() == attribute.size);
+                assert(attribute_format.size == (i + 1 == attribute_offsets.size() ? a_attributes.size() : attribute_offsets[i + 1]) - current_offset);
+                assert(attribute_format.size == (i + 1 == attribute_offsets.size() ? b_attributes.size() : attribute_offsets[i + 1]) - current_offset);
 
-                ab_attributes.emplace_back(attribute.size);
-                if (attribute.mode == attr_mode_t::ATTR_MODE_PACKED)
+                if (attribute_format.mode == attr_mode_t::ATTR_MODE_PACKED)
                 {
                     // normal should be slerped
-                    assert(a_attribute.at(3) == 0 && b_attribute.at(3) == 0);
+                    assert(a_attributes[current_offset + 3] == 0 && b_attributes[current_offset + 3] == 0);
 
-                    geom::point_3f a(a_attribute.at(0), a_attribute.at(1), a_attribute.at(2));
+                    geom::point_3f a(a_attributes[current_offset + 0], a_attributes[current_offset + 1], a_attributes[current_offset + 2]);
                     normalize(a);
 
-                    geom::point_3f b(b_attribute.at(0), b_attribute.at(1), b_attribute.at(2));
+                    geom::point_3f b(b_attributes[current_offset + 0], b_attributes[current_offset + 1], b_attributes[current_offset + 2]);
                     normalize(b);
 
                     geom::point_3f ab;
@@ -295,15 +298,32 @@ namespace aurora {
                         ab = geom::blend(a, b, alpha);
                     normalize(ab);
 
-                    ab_attributes.back() = { ab.x, ab.y, ab.z, 0 };
-
+                    ab_attributes[current_offset + 0] = ab.x;
+                    ab_attributes[current_offset + 1] = ab.y;
+                    ab_attributes[current_offset + 2] = ab.z;
+                    // current_offset + 3 == 0 already (w coordinate)
                 }
                 else
-                    for (size_t j = 0; j < attribute.size; ++j)
-                        ab_attributes.back().at(j) = geom::blend(a_attribute.at(j), b_attribute.at(j), alpha);
+                    for (size_t j = 0; j < attribute_format.size; ++j)
+                        ab_attributes[current_offset + j] = geom::blend(a_attributes[current_offset + j], b_attributes[current_offset + j], alpha);
             }
 
             return ab_attributes;
+        }
+
+        inline std::vector<size_t> vertex_attribute_offsets(const mesh_subdivider::vertex_format_t& vertex_format)
+        {
+            std::vector<size_t> out = { 0 };
+
+            for (int i = 0; i + 1 < vertex_format.attributes.size(); ++i)
+            {
+                const auto &attribute = vertex_format.attributes.at(i);
+                if (attribute.mode == attr_mode_t::ATTR_MODE_PACKED)
+                    assert(vertex_format.attributes.at(i).size == 4);
+                out.emplace_back(out.back() + attribute.size);
+            }
+
+            return out;
         }
 
         template<typename T>
@@ -312,18 +332,7 @@ namespace aurora {
             T&& value,
             std::vector<uint8_t> &byte_buffer
         ) {
-            using T2 = typename std::remove_const<T>::type;
-            static_assert(std::is_same<geom::point_4f, T2>::value || std::is_same<float, T2>::value);
-
-            const base_attribute_converter<T2> *converter = [&] {
-                if constexpr (std::is_same_v<float, T2>)
-                    return float_converters.at(type);
-                else 
-                    return point_4f_converters.at(type);
-            }();
-
-            auto bytes = converter->to_binary(std::forward<const T>(value));
-            std::copy(bytes.begin(), bytes.end(), std::back_inserter(byte_buffer));
+            get_converter<std::remove_const_t<T>>(type)->to_binary(std::forward<const T>(value), byte_buffer);
         }
     }
 }

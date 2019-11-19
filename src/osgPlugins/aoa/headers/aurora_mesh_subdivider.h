@@ -16,7 +16,7 @@ struct mesh_subdivider
 
     using vertex_format_t = refl::data_buffer::vao_buffer::vertex_format;
     using vertex_index_t = size_t;
-    using vertex_attributes_t = std::vector<std::vector<float>>;
+    using vertex_attributes_t = std::vector<float>;
 
     struct data_buffer_t
     {
@@ -31,7 +31,7 @@ private:
 
         vertex_data_t(const vertex_attributes_t &&attributes);
         vertex_data_t(const vertex_format_t &vertex_format, uint8_t const *bytes);
-        void to_byte_buffer(const vertex_format_t &vertex_format, std::vector<uint8_t> &byte_buffer) const;
+        void to_byte_buffer(const vertex_format_t &vertex_format, std::vector<size_t> attribute_offsets, std::vector<uint8_t> &byte_buffer) const;
     };
 
     struct geometry_stream_t
@@ -44,7 +44,9 @@ private:
 
         const size_t vertex_stride;
         size_t index_stride;
-        const size_t coordinate_attribute;
+
+        const std::vector<size_t> attribute_offsets;
+        const size_t coordinate_attribute_offset;
 
         std::vector<vertex_data_t> vertices;
         std::vector<vertex_index_t> indexes;
@@ -63,7 +65,6 @@ private:
     float cell_size;
 
     std::vector<uint8_t> data_buffer;
-    std::map<std::tuple<vertex_index_t, vertex_index_t, float>, vertex_index_t> split_vertex_cache;
 
     void map_data_buffer(std::vector<uint8_t> &);
     

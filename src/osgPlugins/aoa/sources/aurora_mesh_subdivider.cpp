@@ -2,6 +2,7 @@
 #include "aurora_aoa_reader.h"
 #include "attribute_operations.h"
 #include <optional>
+#include "geometry/primitives/triangle.h"
 
 namespace aurora {
     mesh_subdivider::vertex_data_t::vertex_data_t(const vertex_attributes_t&& attributes)
@@ -12,27 +13,32 @@ namespace aurora {
         : attributes(attribute_operations::vertex_attributes_from_bytes(vertex_format, bytes)) 
     {}
 
-    void mesh_subdivider::vertex_data_t::to_byte_buffer(const vertex_format_t &vertex_format, std::vector<uint8_t> &byte_buffer) const
+    void mesh_subdivider::vertex_data_t::to_byte_buffer(const vertex_format_t &vertex_format, std::vector<size_t> attribute_offsets, std::vector<uint8_t> &byte_buffer) const
     {
-        assert(vertex_format.attributes.size() == attributes.size());
+        assert(vertex_format.attributes.size() == attribute_offsets.size());
         using namespace attribute_operations;
 
         for (size_t i = 0; i < vertex_format.attributes.size(); ++i)
         {
             const auto &attribute_format = vertex_format.attributes.at(i);
-            const auto &attribute_value = attributes.at(i);
+            const auto current_offset = attribute_offsets.at(i);
 
-            assert(attribute_format.size == attribute_value.size());
+            assert(attribute_format.size == (i + 1 == attribute_offsets.size() ? attributes.size() : attribute_offsets.at(i + 1)) - current_offset);
 
             if (attribute_format.mode == attr_mode_t::ATTR_MODE_PACKED)
                 convert_and_add_to_back(
                     attribute_format.type,
-                    geom::point_4f{ attribute_value.at(0), attribute_value.at(1), attribute_value.at(2), attribute_value.at(3) },
+                    geom::point_4f{ 
+                        attributes.at(current_offset), 
+                        attributes.at(current_offset + 1), 
+                        attributes.at(current_offset + 2), 
+                        attributes.at(current_offset + 3) 
+                    },
                     byte_buffer
                 );
             else
                 for (size_t j = 0; j < attribute_format.size; ++j)
-                    convert_and_add_to_back(attribute_format.type, std::forward<const float>(attribute_value.at(j)), byte_buffer);
+                    convert_and_add_to_back(attribute_format.type, std::forward<const float>(attributes.at(current_offset + j)), byte_buffer);
         }
     }
 
@@ -40,7 +46,8 @@ namespace aurora {
         : aoa_vao(aoa_vao)
         , aoa_geometry_stream(aoa_geometry_stream)
         , vertex_stride(attribute_operations::vertex_format_stride(aoa_vao.format))
-        , coordinate_attribute(attribute_operations::vertex_coordinate_attribute_index(aoa_vao.format))
+        , attribute_offsets(attribute_operations::vertex_attribute_offsets(aoa_vao.format))
+        , coordinate_attribute_offset(attribute_offsets.at(attribute_operations::vertex_coordinate_attribute_index(aoa_vao.format)))
     {
         {
             const uint8_t *vertex_start = data_buffer.data.data()
@@ -143,8 +150,6 @@ namespace aurora {
                 const auto stream_id = mesh->vao_ref.geom_stream_id;
                 auto &geometry_stream = geometry_streams.at(stream_id);
 
-                split_vertex_cache.clear();
-                
                 for (auto &mesh_face : mesh->face_array)
                     if (auto &face_info = mesh_face.with_shadow_mat)
                         subdivide_mesh_face(
@@ -185,126 +190,153 @@ namespace aurora {
         face_info.count = face_info.num_vertices / 3;
     }
     
+    struct weighted_point_t
+    {
+        float alpha, beta;
+        geom::point_3f p;
+        std::optional<mesh_subdivider::vertex_index_t> i;
+    };
+
+    enum coord_t
+    {
+        X, Y
+    };
+
+    template<coord_t Coord>
+    void intersect_half_plane(std::vector<weighted_point_t> &polygon, const float coord, const float sign)
+    {
+        const static auto get_coord = [](weighted_point_t &p) constexpr
+        {
+            if constexpr (Coord == X)
+                return p.p.x;
+            else if (Coord == Y)
+                return p.p.y;
+        };
+
+        static std::vector<weighted_point_t> tmp;
+        tmp.clear();
+
+        for (size_t i = 0; i < polygon.size(); ++i)
+        {
+            size_t j = (i + 1) % polygon.size();
+
+            auto pi = polygon.at(i);
+            auto pj = polygon.at(j);
+
+            if (sign * get_coord(pi) >= sign * coord)
+                tmp.push_back(pi);
+            if (
+                (sign * get_coord(pi) >= sign * coord && sign * coord >= sign * get_coord(pj)) ||
+                (sign * get_coord(pj) >= sign * coord && sign * coord >= sign * get_coord(pi))
+            ) {
+                const float alpha = abs((get_coord(pi) - coord) / (get_coord(pi) - get_coord(pj)));
+                tmp.push_back({
+                    geom::blend(pi.alpha, pj.alpha, alpha),
+                    geom::blend(pi.beta,  pj.beta,  alpha),
+                    geom::blend(pi.p,     pj.p,     alpha)
+                });
+            }
+        }
+
+        std::swap(tmp, polygon);
+    };
+
+    std::vector<weighted_point_t> intersect_rectangle(std::vector<weighted_point_t> polygon, const geom::rectangle_2f &rectangle)
+    {
+        intersect_half_plane<X>(polygon, rectangle.lo().x,  1);
+        intersect_half_plane<X>(polygon, rectangle.hi().x, -1);
+        intersect_half_plane<Y>(polygon, rectangle.lo().y,  1);
+        intersect_half_plane<Y>(polygon, rectangle.hi().y, -1);
+
+        return polygon;
+    }
+
     void mesh_subdivider::subdivide_triangle(
         geometry_stream_t &geometry_stream,
-        const vertex_index_t ia0, const vertex_index_t ib0, const vertex_index_t ic0
+        const vertex_index_t ia, const vertex_index_t ib, const vertex_index_t ic
     ) {
         using namespace attribute_operations;
 
-        std::deque<std::tuple<vertex_index_t, vertex_index_t, vertex_index_t>> q = { { ia0, ib0, ic0 } };
-
-        struct indexed_point
-        {
-            vertex_index_t i;
-            geom::point_3f p;
-
-            indexed_point(vertex_index_t i, geometry_stream_t &geometry_stream)
-                : i(i)
-                , p(to_point_3f(geometry_stream.vertices.at(i).attributes.at(geometry_stream.coordinate_attribute)))
-            {}
+        const std::vector<weighted_point_t> triangle {
+            { 1, 0, to_point_3f(geometry_stream.vertices.at(ia).attributes, geometry_stream.coordinate_attribute_offset), ia },
+            { 0, 1, to_point_3f(geometry_stream.vertices.at(ib).attributes, geometry_stream.coordinate_attribute_offset), ib },
+            { 0, 0, to_point_3f(geometry_stream.vertices.at(ic).attributes, geometry_stream.coordinate_attribute_offset), ic },
         };
 
-        while (!q.empty())
+        const auto bbox_cells = [&triangle, this]
         {
-            indexed_point a(std::get<0>(q.front()), geometry_stream);
-            indexed_point b(std::get<1>(q.front()), geometry_stream);
-            indexed_point c(std::get<2>(q.front()), geometry_stream);
-            q.pop_front();
+            float x_min, x_max;
+            geom::min_max_3(triangle.at(0).p.x, triangle.at(1).p.x, triangle.at(2).p.x, x_min, x_max);
 
-            const auto rotate_ccw = [&a, &b, &c]()
-            {
-                std::swap(a, b);
-                std::swap(c, b);
-            };
+            float x_min_cell, x_max_cell;
+            std::modf(x_min / cell_size - 2, &x_min_cell);
+            std::modf(x_max / cell_size + 2, &x_max_cell);
+            
+            float y_min, y_max;
+            geom::min_max_3(triangle.at(0).p.y, triangle.at(1).p.y, triangle.at(2).p.y, y_min, y_max);
 
-            const auto try_split = [&, this](auto coord, const bool is_min)
-            {            
-                while (is_min ? coord(a) > std::min(coord(b), coord(c)) : coord(a) < std::max(coord(b), coord(c)))
-                    rotate_ccw();
-                                    
-                std::optional<float> ab = get_split_point(coord(a), coord(b));
-                std::optional<float> ac = get_split_point(coord(a), coord(c));
-                                                                               
-                if (ab && ac)
+            float y_min_cell, y_max_cell;
+            std::modf(y_min / cell_size - 2, &y_min_cell);
+            std::modf(y_max / cell_size + 2, &y_max_cell);
+
+            return geom::rectangle_2f(
+                geom::range_2f(x_min_cell, x_max_cell),
+                geom::range_2f(y_min_cell, y_max_cell)
+            );
+        }();
+
+        for (float x_cell = bbox_cells.lo().x; x_cell <= bbox_cells.hi().x; ++x_cell)
+            for (float y_cell = bbox_cells.lo().y; y_cell <= bbox_cells.hi().y; ++y_cell) {
+                const auto intersection_points = intersect_rectangle(
+                    triangle,
+                    geom::rectangle_by_size(
+                        geom::point_2f(x_cell, y_cell) * cell_size,
+                        geom::point_2f::from_scalar(cell_size)
+                    )
+                );
+
+                if (intersection_points.size() < 3)
+                    continue;
+
+                size_t base_index = -1;
+                size_t prev_index = -1;
+
+                for (size_t k = 0; k < intersection_points.size(); ++k)
                 {
-                    const float split_point = is_min ? std::min(ab.value(), ac.value()) : std::max(ab.value(), ac.value());
-                    const vertex_index_t iab = split_vertex(geometry_stream, a.i, b.i, (split_point - coord(a)) / (coord(b) - coord(a)));
-                    const vertex_index_t iac = split_vertex(geometry_stream, a.i, c.i, (split_point - coord(a)) / (coord(c) - coord(a)));
+                    const auto &p = intersection_points.at(k);
+                    const vertex_index_t new_index = p.i
+                        ? p.i.value()
+                        : geometry_stream.vertices.size();
 
-                    q.insert(q.end(), {
-                        { a.i, iab, iac },
-                        { iab, b.i, c.i },
-                        { iab, c.i, iac }
-                    });
+                    if (!p.i)
+                        geometry_stream.vertices.emplace_back(
+                            interpolate_vertex_attributes(
+                                geometry_stream.aoa_vao.format,
+                                geometry_stream.attribute_offsets,
+                                geometry_stream.vertices.at(ic).attributes,
+                                interpolate_vertex_attributes(
+                                    geometry_stream.aoa_vao.format,
+                                    geometry_stream.attribute_offsets,
+                                    geometry_stream.vertices.at(ia).attributes,
+                                    geometry_stream.vertices.at(ib).attributes,
+                                    p.beta / (p.alpha + p.beta)
+                                ),
+                                p.alpha + p.beta
+                            )
+                        );
 
-                    return true;
+                    if (k == 0)
+                        base_index = new_index;
+                    else if (k == 1)
+                        prev_index = new_index;
+                    else
+                    {
+                        assert(base_index != -1 && prev_index != -1);
+                        geometry_stream.indexes.insert(geometry_stream.indexes.end(), { base_index, prev_index, new_index });
+                        prev_index = new_index;
+                    }
                 }
-
-                return false;
-            };
-
-            if (!(
-                try_split([](indexed_point &p) { return p.p.x; }, false) 
-                || try_split([](indexed_point &p) { return p.p.x; }, true) 
-                || try_split([](indexed_point &p) { return p.p.y; }, false) 
-                || try_split([](indexed_point &p) { return p.p.y; }, true)
-            ))
-                geometry_stream.indexes.insert(geometry_stream.indexes.end(), { a.i, b.i, c.i });
-        }
-    }
-
-    mesh_subdivider::vertex_index_t mesh_subdivider::split_vertex(
-        geometry_stream_t &geometry_stream, const vertex_index_t ia, const vertex_index_t ib, const float alpha
-    ) {
-        if (const auto it = split_vertex_cache.find({ ia, ib, alpha }); it != split_vertex_cache.end())
-            return it->second;
-
-        const auto index = geometry_stream.vertices.size();
-        auto ab = attribute_operations::interpolate_vertex_attributes(
-            geometry_stream.aoa_vao.format,
-            geometry_stream.vertices.at(ia).attributes,
-            geometry_stream.vertices.at(ib).attributes,
-            alpha
-        );
-        geometry_stream.vertices.emplace_back(std::move(ab));
-
-        split_vertex_cache.emplace(std::make_tuple(ia, ib, alpha), index);
-        return index;
-    };
-
-    const static float EPS = 1e-3f;
-
-    std::optional<float> mesh_subdivider::get_split_point(float a, float b)
-    {
-        if (abs(a - b) <= EPS)
-            return {};
-
-        bool flip = false;
-        if (a > b)
-        {
-            std::swap(a, b);
-            flip = true;
-        }
-
-        float a_cell, b_cell;
-        std::modf((a + EPS) / cell_size, &a_cell);
-        std::modf((b - EPS) / cell_size, &b_cell);
-
-        if (a_cell < b_cell || a < -EPS && b > EPS)
-        {
-            const float ab = flip
-                ? (a < -EPS ? a_cell : a_cell + 1) * cell_size
-                : (b < -EPS ? b_cell - 1 : b_cell) * cell_size;
-
-            const float alpha = (ab - a) / (b - a);
-
-            if (EPS < alpha && alpha < 1 - EPS)
-                return ab;
-        }
-
-        OSG_DEBUG << "Not splitting " << a << " & " << b << ": " << a_cell << " & " << b_cell << (flip ? " [FLIP]" : "") << std::endl;
-
-        return {};
+            }
     }
 
     void mesh_subdivider::assemble_data_buffer(const std::vector<uint8_t> &data_buffer_in) // filling output data buffer and updating aoa
@@ -411,7 +443,7 @@ namespace aurora {
                     auto &[offset, size] = stream.aoa_geometry_stream.vertex_offset_size;
                     offset = data_buffer.size() - vertex_offset;
                     for (auto &vertex : stream.vertices)
-                        vertex.to_byte_buffer(vao_info.format, data_buffer);
+                        vertex.to_byte_buffer(vao_info.format, stream.attribute_offsets, data_buffer);
                     size = data_buffer.size() - vertex_offset - offset;
                 }
             }
